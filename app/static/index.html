@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ìdìbò</title>
+<meta name="description" content="Ask about Nigeria's 2027 election by voice, in your language. Answers come from INEC and the Electoral Act 2026.">
+<meta name="theme-color" content="#0B6B43">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B6B43'/%3E%3Cpath d='M18 30h28v20H18z' fill='%23fff'/%3E%3Cpath d='M26 20l10 0 0 14-10 0z' fill='%23F2C14E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- Language picker (first visit, and from the header). Each card speaks its own name. -->
+<section id="langPicker" class="picker" hidden aria-labelledby="pickerTitle">
+  <div class="picker-inner">
+    <div class="brand big"><span class="logo" aria-hidden="true"></span><span>Ìdìbò</span></div>
+    <h1 id="pickerTitle" class="picker-title">
+      <span lang="en">Choose your language</span> · <span lang="yo">Yan èdè rẹ</span> ·
+      <span lang="ha">Zaɓi harshenka</span> · <span lang="ig">Họrọ asụsụ gị</span> · <span lang="pcm">Pick your language</span>
+    </h1>
+    <div class="lang-grid" role="list"></div>
+    <p class="fineprint">Tap 🔊 to hear the name. Tap the card to start.</p>
+  </div>
+</section>
+
+<header class="top">
+  <button class="brand" id="homeBtn" aria-label="Ìdìbò home"><span class="logo" aria-hidden="true"></span><span>Ìdìbò</span></button>
+  <nav class="top-actions">
+    <button class="chip" id="langBtn" aria-label="Change language"><span class="i i-globe" aria-hidden="true"></span><span id="langName">English</span></button>
+    <button class="chip ghost" id="voiceToggle" aria-pressed="true" aria-label="Read answers aloud"><span class="i i-speaker" aria-hidden="true"></span></button>
+  </nav>
+</header>
+
+<main id="main">
+  <!-- HOME -->
+  <section id="home" class="view">
+    <p class="unofficial"><span class="i i-info" aria-hidden="true"></span><span data-t="notOfficial"></span></p>
+
+    <div class="hero">
+      <button class="mic" id="micBtn" aria-label="Speak your question">
+        <span class="mic-ring" aria-hidden="true"></span>
+        <span class="i i-mic" aria-hidden="true"></span>
+      </button>
+      <p class="hero-label" data-t="speak"></p>
+      <p class="hero-sub" id="micStatus" aria-live="polite"></p>
+    </div>
+
+    <h2 class="section-label"><span class="i i-hand" aria-hidden="true"></span><span data-t="orTap"></span></h2>
+    <div class="cards" id="cards" role="list"></div>
+
+    <button class="check-card" id="openCheck">
+      <span class="badge-ic warn"><span class="i i-shield" aria-hidden="true"></span></span>
+      <span class="check-text"><strong data-t="checkTitle"></strong><span data-t="checkSub"></span></span>
+      <span class="i i-arrow" aria-hidden="true"></span>
+    </button>
+
+    <form class="typebox" id="typeForm" autocomplete="off">
+      <label class="sr" for="typeInput" data-t="typeHere"></label>
+      <input id="typeInput" type="text" data-tp="typeHere" enterkeyhint="send">
+      <button class="send" aria-label="Send"><span class="i i-send" aria-hidden="true"></span></button>
+    </form>
+  </section>
+
+  <!-- CONVERSATION -->
+  <section id="chat" class="view" hidden>
+    <button class="back" id="backBtn"><span class="i i-back" aria-hidden="true"></span><span data-t="back"></span></button>
+    <div class="thread" id="thread" aria-live="polite"></div>
+    <div class="chat-dock">
+      <button class="mic small" id="micBtn2" aria-label="Speak another question"><span class="i i-mic" aria-hidden="true"></span></button>
+      <form class="typebox inline" id="typeForm2" autocomplete="off">
+        <label class="sr" for="typeInput2" data-t="typeHere"></label>
+        <input id="typeInput2" type="text" data-tp="typeHere" enterkeyhint="send">
+        <button class="send" aria-label="Send"><span class="i i-send" aria-hidden="true"></span></button>
+      </form>
+    </div>
+  </section>
+
+  <!-- CHECK A MESSAGE -->
+  <section id="check" class="view" hidden>
+    <button class="back" data-go="home"><span class="i i-back" aria-hidden="true"></span><span data-t="back"></span></button>
+    <h1 class="h1"><span class="badge-ic warn"><span class="i i-shield" aria-hidden="true"></span></span><span data-t="checkTitle"></span></h1>
+    <p class="lead" data-t="checkHelp"></p>
+    <form id="checkForm">
+      <label class="sr" for="checkInput" data-t="checkTitle"></label>
+      <textarea id="checkInput" rows="5" data-tp="checkPlaceholder"></textarea>
+      <div class="row">
+        <button type="button" class="btn ghost" id="pasteBtn"><span class="i i-paste" aria-hidden="true"></span><span data-t="paste"></span></button>
+        <button class="btn primary"><span class="i i-shield" aria-hidden="true"></span><span data-t="checkBtn"></span></button>
+      </div>
+    </form>
+  </section>
+
+  <!-- JUDGE VIEW -->
+  <section id="judge" class="view" hidden>
+    <button class="back" data-go="home"><span class="i i-back" aria-hidden="true"></span><span>Back</span></button>
+    <h1 class="h1">Base Tiny Aya vs Ìdìbò</h1>
+    <p class="lead">Recorded answers from our evaluation runs: the same question, the same official sources. Scores from the full benchmark (EN, Pidgin, Yorùbá, Hausa).</p>
+    <div id="judgeSummary" class="judge-summary"></div>
+    <div id="judgeExamples" class="judge-examples"></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span data-t="footer"></span>
+  <a href="#judge" id="judgeLink">Judge view</a>
+</footer>
+
+<!-- Source sheet -->
+<dialog id="sourceSheet" class="sheet" aria-labelledby="srcTitle">
+  <div class="sheet-head">
+    <span class="badge-ic"><span class="i i-doc" aria-hidden="true"></span></span>
+    <div><h2 id="srcTitle"></h2><p id="srcSub"></p></div>
+    <button class="icon-btn" id="srcClose" aria-label="Close"><span class="i i-x" aria-hidden="true"></span></button>
+  </div>
+  <pre id="srcText" class="src-text"></pre>
+  <a id="srcLink" class="btn ghost" target="_blank" rel="noopener"><span class="i i-link" aria-hidden="true"></span><span data-t="openOfficial"></span></a>
+</dialog>
+
+<audio id="player" preload="none"></audio>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
