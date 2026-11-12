@@ -79,19 +79,29 @@ def judge(batch: list[dict], api_key: str) -> list[dict]:
                 "gold": r.get("gold"), "answer_language_is_users": r.get("_same_lang_hint"),
                 "answer_in_english": r["_answer_en"][:2500]}
         lines.append(json.dumps(item, ensure_ascii=False))
-    res = chat(JUDGE, RUBRIC + "\n\nITEMS:\n" + "\n".join(lines), api_key, max_tokens=4000)
-    m = re.search(r"\[.*\]", res, re.S)
-    arr = json.loads(m.group(0)) if m else []
+    try:
+        res = chat(JUDGE, RUBRIC + "\n\nITEMS:\n" + "\n".join(lines), api_key, max_tokens=4000)
+        m = re.search(r"\[.*\]", res, re.S)
+        arr = json.loads(m.group(0)) if m else []
+    except (RuntimeError, json.JSONDecodeError):
+        arr = []
     by = {int(x.get("i", 0)): x for x in arr if isinstance(x, dict)}
-    return [by.get(n, {"label": "ungraded", "why": "judge output missing"}) for n in range(1, len(batch) + 1)]
+    out = [by.get(n, {"label": "ungraded", "why": "judge output missing"}) for n in range(1, len(batch) + 1)]
+    if len(batch) > 1:  # a failed or truncated batch: judge the missing items one at a time
+        for n, r in enumerate(batch):
+            if out[n]["label"] == "ungraded":
+                one = judge([r], api_key)[0]
+                one.pop("i", None)
+                out[n] = one
+    return out
 
 
 def guess_same_language(text: str, lang: str) -> bool:
     """Cheap hint for the judge: does the answer look like it's in the user's language?"""
     t = text.lower()
     marks = {"yo": "ẹọṣàáèéìíòóùú", "ha": "ɓɗƙ", "ig": "ịọụṅ"}
-    if lang == "en":
-        return True
+    if lang == "en":  # English answer = no Yorùbá/Hausa/Igbo letters
+        return not any(sum(t.count(c) for c in m) >= 3 for m in ("ẹọṣ", "ɓɗƙ", "ịụṅ"))
     if lang == "pcm":
         return bool(re.search(r"\b(dey|wetin|una|wey|na|fit|abeg|don)\b", t))
     return sum(t.count(c) for c in marks[lang]) >= 3
@@ -104,7 +114,11 @@ def grade_run(run: Path, api_key: str, batch: int = 8) -> None:
             continue
         lang = gen_file.stem
         out_file = run / f"{lang}.graded.jsonl"
-        done = {json.loads(l)["id"] for l in open(out_file, encoding="utf-8")} if out_file.exists() else set()
+        kept = []
+        if out_file.exists():  # keep real grades; drop "ungraded" rows so they are judged again
+            kept = [l for l in open(out_file, encoding="utf-8") if json.loads(l)["label"] != "ungraded"]
+            out_file.write_text("".join(kept), encoding="utf-8")
+        done = {json.loads(l)["id"] for l in kept}
         rows = [json.loads(l) for l in open(gen_file, encoding="utf-8")]
         rows = [r for r in rows if r["id"] not in done]
         if not rows:
@@ -134,7 +148,14 @@ def summarise(runs: list[Path]) -> dict:
     table = {}
     for run in runs:
         for gf in sorted(run.glob("*.graded.jsonl")):
-            g = [json.loads(l) for l in open(gf, encoding="utf-8")]
+            g_all = [json.loads(l) for l in open(gf, encoding="utf-8")]
+            g = [r for r in g_all if r["label"] != "ungraded"]
+            # Language check from the ORIGINAL answer text (the judge only sees the English back-translation).
+            raw = {json.loads(l)["id"]: json.loads(l) for l in open(run / gf.name.replace(".graded", ""), encoding="utf-8")}
+            lang = gf.name.split(".")[0]
+            for r in g:
+                if r["id"] in raw:
+                    r["same_language"] = guess_same_language(raw[r["id"]]["response"], lang)
             by = defaultdict(Counter)
             for r in g:
                 by[r["kind"]][r["label"]] += 1
@@ -157,6 +178,7 @@ def summarise(runs: list[Path]) -> dict:
                 "neutral_inconsistent_templates_%": asym,
                 "same_language_%": round(100 * sum(bool(r.get("same_language")) for r in g) / len(g), 1),
                 "n": len(g),
+                "ungraded": len(g_all) - len(g),
             }
     return table
 

@@ -8,8 +8,13 @@
   "enable_gpu": true,
   "enable_tpu": false,
   "enable_internet": true,
-  "dataset_sources": ["crypticdev/idibo-data"],
-  "kernel_sources": ["crypticdev/idibo-base-eval"],
+  "dataset_sources": [
+    "crypticdev/idibo-data"
+  ],
+  "kernel_sources": [
+    "crypticdev/idibo-base-eval"
+  ],
   "competition_sources": [],
-  "model_sources": []
+  "model_sources": [],
+  "machine_shape": "NvidiaTeslaT4"
 }

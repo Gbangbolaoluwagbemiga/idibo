@@ -23,9 +23,15 @@ if tars:
     os.makedirs(W, exist_ok=True)
     tarfile.open(tars[0]).extractall(W)
 else:
-    found = glob.glob("/kaggle/input/**/scripts/run_eval.py", recursive=True)
+    # Only the dataset copy: the base-eval output also has an idibo/ folder, but without data/train.
+    found = [f for f in glob.glob("/kaggle/input/**/scripts/run_eval.py", recursive=True)
+             if os.path.exists(os.path.join(os.path.dirname(os.path.dirname(f)), "data/train/civic.jsonl"))]
+    assert found, f"training data not found in inputs: {glob.glob('/kaggle/input/*/*')}"
     shutil.copytree(os.path.dirname(os.path.dirname(found[0])), W, dirs_exist_ok=True)
 os.chdir(W)
+import torch
+assert torch.cuda.device_count() >= 1, "no GPU attached: set Accelerator to GPU T4 x2"
+print("gpus:", torch.cuda.device_count(), flush=True)
 MODEL = glob.glob("/kaggle/input/**/model/tiny-aya-earth/config.json", recursive=True)
 assert MODEL, "attach the output of crypticdev/idibo-base-eval (it holds the model copy)"
 MODEL = os.path.dirname(MODEL[0])
