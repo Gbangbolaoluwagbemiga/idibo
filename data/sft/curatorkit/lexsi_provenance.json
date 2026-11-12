@@ -1,0 +1,27 @@
+{
+  "schema": "lexsi.provenance/1",
+  "library": "curatorkit",
+  "version": "0.1.21",
+  "git_sha": null,
+  "created_at": "2026-11-12T12:28:23Z",
+  "base_model": null,
+  "method": "curate",
+  "inputs": [
+    {
+      "kind": "dataset",
+      "ref": "/Users/mac/iCloud Drive (Archive)/Desktop/Desktop - Oluwagbemiga/Hacks/Lexsi/idibo/data/sft/en_merged.jsonl",
+      "config": null,
+      "provenance": null
+    }
+  ],
+  "params": {
+    "generator_model": null,
+    "judge_model": null,
+    "grpo_scoring_model": null,
+    "export_formats": [
+      "messages"
+    ],
+    "output_split": null,
+    "pipeline_config_hash": "8c47eb58f0a4b752"
+  }
+}

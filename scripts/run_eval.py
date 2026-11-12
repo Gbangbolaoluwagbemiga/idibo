@@ -60,6 +60,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int)
     ap.add_argument("--max-new-tokens", type=int, default=320)
     ap.add_argument("--device", default=None)
+    ap.add_argument("--batch", type=int, default=8, help="questions generated together (left-padded)")
     ap.add_argument("--out", help="output directory (default: runs/<name>)")
     a = ap.parse_args()
 
@@ -84,30 +85,38 @@ def main() -> None:
         path = out_dir / f"{lang}.jsonl"
         if path.exists():  # resume
             done = {json.loads(l)["id"] for l in open(path, encoding="utf-8")}
+        todo = [it for it in bench if it["id"] not in done]
+        tok.padding_side = "left"  # batched generation needs left padding
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
         with open(path, "a", encoding="utf-8") as f:
-            for it in bench:
-                if it["id"] in done:
-                    continue
-                user, ctx_ids = it["prompt"], []
-                if kb:
-                    hits = kb.search(it["prompt"], k=4)
-                    ctx_ids = [h["id"] for h in hits]
-                    user = f"SOURCES:\n{format_context(hits)}\n\nQUESTION:\n{it['prompt']}"
-                msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-                enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True)
-                enc = {k: v.to(device) for k, v in enc.items()}
+            for b in range(0, len(todo), a.batch):
+                chunk = todo[b: b + a.batch]
+                texts, ctxs = [], []
+                for it in chunk:
+                    user, ctx_ids = it["prompt"], []
+                    if kb:
+                        hits = kb.search(it["prompt"], k=4)
+                        ctx_ids = [h["id"] for h in hits]
+                        user = f"SOURCES:\n{format_context(hits)}\n\nQUESTION:\n{it['prompt']}"
+                    msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+                    texts.append(tok.apply_chat_template(msgs, add_generation_prompt=True, tokenize=False))
+                    ctxs.append(ctx_ids)
+                enc = tok(texts, return_tensors="pt", padding=True, add_special_tokens=False).to(device)
                 n_in = enc["input_ids"].shape[1]
                 t = time.time()
                 with torch.no_grad():
-                    gen = model.generate(**enc, max_new_tokens=a.max_new_tokens, do_sample=False)
-                resp = tok.decode(gen[0, n_in:], skip_special_tokens=True).strip()
-                rec = {k: it.get(k) for k in ("id", "kind", "category", "pair", "swap")}
-                rec.update(lang=lang, prompt=it["prompt"], response=resp, context_ids=ctx_ids, model=a.model,
-                           adapter=a.adapter, rag=a.rag, policy=a.policy, seconds=round(time.time() - t, 2))
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                    gen = model.generate(**enc, max_new_tokens=a.max_new_tokens, do_sample=False,
+                                         pad_token_id=tok.pad_token_id)
+                secs = round((time.time() - t) / len(chunk), 2)
+                for j, it in enumerate(chunk):
+                    resp = tok.decode(gen[j, n_in:], skip_special_tokens=True).strip()
+                    rec = {k: it.get(k) for k in ("id", "kind", "category", "pair", "swap")}
+                    rec.update(lang=lang, prompt=it["prompt"], response=resp, context_ids=ctxs[j], model=a.model,
+                               adapter=a.adapter, rag=a.rag, policy=a.policy, seconds=secs)
+                    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                    print(f"[{lang}] {it['id']:<28} {secs:>5}s  {resp[:90]!r}", flush=True)
                 f.flush()
-                print(f"[{lang}] {it['id']:<28} {rec['seconds']:>5}s  {resp[:90]!r}")
-
 
 if __name__ == "__main__":
     main()
