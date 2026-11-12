@@ -34,7 +34,11 @@ def load(model_id: str, adapter: str | None, device: str):
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    dtype = torch.bfloat16 if device in ("cuda", "mps") else torch.float32
+    # T4 GPUs (Kaggle) have no bfloat16, so use float16 there; bfloat16 elsewhere on GPU/MPS.
+    if device == "cuda":
+        dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    else:
+        dtype = torch.bfloat16 if device == "mps" else torch.float32
     tok = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype).to(device)
     if adapter:
@@ -56,6 +60,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int)
     ap.add_argument("--max-new-tokens", type=int, default=320)
     ap.add_argument("--device", default=None)
+    ap.add_argument("--out", help="output directory (default: runs/<name>)")
     a = ap.parse_args()
 
     import torch
@@ -69,7 +74,7 @@ def main() -> None:
         kb = HybridKB(path=ROOT / "data/kb/chunks.jsonl", emb=ROOT / "data/kb/e5_small.npy", device=device)
     system = SYSTEM if a.policy == "idibo" else SYSTEM_PLAIN
 
-    out_dir = ROOT / "runs" / a.name
+    out_dir = Path(a.out) if a.out else ROOT / "runs" / a.name
     out_dir.mkdir(parents=True, exist_ok=True)
     for lang in a.langs.split(","):
         bench = [json.loads(l) for l in open(ROOT / f"data/bench/{lang}.jsonl", encoding="utf-8")]
@@ -89,11 +94,13 @@ def main() -> None:
                     ctx_ids = [h["id"] for h in hits]
                     user = f"SOURCES:\n{format_context(hits)}\n\nQUESTION:\n{it['prompt']}"
                 msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-                ids = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt").to(device)
+                enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True)
+                enc = {k: v.to(device) for k, v in enc.items()}
+                n_in = enc["input_ids"].shape[1]
                 t = time.time()
                 with torch.no_grad():
-                    gen = model.generate(ids, max_new_tokens=a.max_new_tokens, do_sample=False)
-                resp = tok.decode(gen[0, ids.shape[1]:], skip_special_tokens=True).strip()
+                    gen = model.generate(**enc, max_new_tokens=a.max_new_tokens, do_sample=False)
+                resp = tok.decode(gen[0, n_in:], skip_special_tokens=True).strip()
                 rec = {k: it.get(k) for k in ("id", "kind", "category", "pair", "swap")}
                 rec.update(lang=lang, prompt=it["prompt"], response=resp, context_ids=ctx_ids, model=a.model,
                            adapter=a.adapter, rag=a.rag, policy=a.policy, seconds=round(time.time() - t, 2))
