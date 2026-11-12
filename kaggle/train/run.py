@@ -5,6 +5,8 @@
 # GPU 0 trains "civic" then "idibo"; GPU 1 meanwhile evaluates the base model in the other languages.
 import glob, json, os, shutil, subprocess, sys, tarfile, time
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # this process trains on GPU 0; the base evals get GPU 1 via env1
+
 
 def sh(cmd, env=None):
     print("+", cmd, flush=True)
@@ -14,6 +16,8 @@ def sh(cmd, env=None):
 sh("pip install -q -U 'transformers>=4.51.3' accelerate sentence-transformers peft 'trl>=1.0' datasets")
 # --no-deps: AlignTune pins torch<2.14, and letting pip downgrade Kaggle's torch would cost a big reinstall.
 sh("pip install -q --no-deps aligntune && pip install -q typer rich pyyaml psutil")
+# Kaggle ships torchao 0.10, which PEFT's LoRA dispatcher rejects (needs >0.16); we don't use it.
+sh("pip uninstall -y -q torchao || true")
 import importlib
 importlib.import_module("aligntune.backends.trl.raft.raft_trainer")  # fail fast if an import is missing
 
@@ -29,12 +33,18 @@ else:
     assert found, f"training data not found in inputs: {glob.glob('/kaggle/input/*/*')}"
     shutil.copytree(os.path.dirname(os.path.dirname(found[0])), W, dirs_exist_ok=True)
 os.chdir(W)
-import torch
-assert torch.cuda.device_count() >= 1, "no GPU attached: set Accelerator to GPU T4 x2"
-print("gpus:", torch.cuda.device_count(), flush=True)
+# Count GPUs without importing torch: initialising CUDA here would make the later CUDA_VISIBLE_DEVICES=0
+# ineffective, and the Trainer would then spread over both GPUs and collide with the GPU-1 base evals.
+NGPU = subprocess.run("nvidia-smi -L", shell=True, capture_output=True, text=True).stdout.count("GPU ")
+assert NGPU >= 1, "no GPU attached: set Accelerator to GPU T4 x2"
+print("gpus:", NGPU, flush=True)
 MODEL = glob.glob("/kaggle/input/**/model/tiny-aya-earth/config.json", recursive=True)
 assert MODEL, "attach the output of crypticdev/idibo-base-eval (it holds the model copy)"
 MODEL = os.path.dirname(MODEL[0])
+# Reading weights lazily from /kaggle/input took 17 min; a local copy loads in seconds.
+if not os.path.exists("/kaggle/tmp/tiny-aya-earth/config.json"):
+    shutil.copytree(MODEL, "/kaggle/tmp/tiny-aya-earth", dirs_exist_ok=True)
+MODEL = "/kaggle/tmp/tiny-aya-earth"
 print("model:", MODEL, flush=True)
 
 VARIANTS = os.environ.get("VARIANTS", "civic,idibo").split(",")
@@ -50,7 +60,6 @@ bg = subprocess.Popen(
     f"--rag --langs {base_langs} --out {OUT}/runs/base-idibo-rag",
     shell=True, env=env1)
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model
@@ -75,7 +84,7 @@ for variant in VARIANTS:
     model.print_trainable_parameters()
     args = SFTConfig(
         output_dir=f"{OUT}/ckpt/{variant}", num_train_epochs=2, per_device_train_batch_size=1,
-        gradient_accumulation_steps=8, learning_rate=1e-4, lr_scheduler_type="cosine", warmup_ratio=0.05,
+        gradient_accumulation_steps=8, learning_rate=1e-4, lr_scheduler_type="cosine", warmup_steps=0.05,
         logging_steps=10, save_strategy="no", fp16=True, max_length=2048, completion_only_loss=True,
         report_to="none", seed=42, gradient_checkpointing=True,
     )
