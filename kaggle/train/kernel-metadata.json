@@ -9,7 +9,8 @@
   "enable_tpu": false,
   "enable_internet": true,
   "dataset_sources": [
-    "crypticdev/idibo-data"
+    "crypticdev/idibo-data",
+    "crypticdev/idibo-artifacts"
   ],
   "kernel_sources": [
     "crypticdev/idibo-base-eval"

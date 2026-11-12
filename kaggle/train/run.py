@@ -2,7 +2,12 @@
 # Inputs: dataset crypticdev/idibo-data (code + data/train/*.jsonl) and the output of crypticdev/idibo-base-eval
 # (which holds a copy of the gated model, so this notebook needs no HF token and can be started from the CLI).
 #
-# GPU 0 trains "civic" then "idibo"; GPU 1 meanwhile evaluates the base model in the other languages.
+# Every training and evaluation step is its own process, so its GPU memory is freed when it exits (v4 trained
+# "civic" fine, then its evaluation ran out of memory because the training process still held 7 GB).
+# Results from earlier runs (dataset crypticdev/idibo-artifacts: the civic adapter, finished eval files) are
+# copied in first; run_eval.py resumes per item, so nothing finished is redone.
+#   GPU 0: train civic (if missing) -> train idibo -> evaluate idibo-rag in en, pcm
+#   GPU 1: evaluate civic-rag (4 langs) -> finish base evals -> wait for the idibo adapter -> idibo-rag in yo, ha
 import glob, json, os, shutil, subprocess, sys, tarfile, time
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # this process trains on GPU 0; the base evals get GPU 1 via env1
@@ -47,59 +52,58 @@ if not os.path.exists("/kaggle/tmp/tiny-aya-earth/config.json"):
 MODEL = "/kaggle/tmp/tiny-aya-earth"
 print("model:", MODEL, flush=True)
 
-VARIANTS = os.environ.get("VARIANTS", "civic,idibo").split(",")
-EVAL_LANGS = os.environ.get("EVAL_LANGS", "en,pcm,yo,ha")
+
 OUT = "/kaggle/working"
+LANGS = os.environ.get("EVAL_LANGS", "en,pcm,yo,ha")
+# Results of earlier versions (dataset crypticdev/idibo-artifacts, one artifacts.tar.gz that Kaggle may or may not
+# unpack); found by content, whatever the mount path.
+for t in glob.glob("/kaggle/input/**/artifacts.tar.gz", recursive=True)[:1]:
+    tarfile.open(t).extractall("/kaggle/tmp/artifacts")
+for marker in (glob.glob("/kaggle/input/**/adapters/civic/adapter_config.json", recursive=True)
+               + glob.glob("/kaggle/tmp/artifacts/adapters/civic/adapter_config.json"))[:1]:
+    root = marker.rsplit("/adapters/", 1)[0]
+    print("artifacts:", root, flush=True)
+    for kind in ("adapters", "runs"):
+        if os.path.isdir(f"{root}/{kind}"):
+            shutil.copytree(f"{root}/{kind}", f"{OUT}/{kind}", dirs_exist_ok=True)
+for f in sorted(glob.glob(f"{OUT}/runs/*/*.jsonl")):
+    print("resume:", f, sum(1 for _ in open(f)), flush=True)
 
-# GPU 1: base model in the non-English languages, both conditions, while GPU 0 trains.
-env1 = dict(os.environ, CUDA_VISIBLE_DEVICES="1")
-base_langs = ",".join(l for l in EVAL_LANGS.split(",") if l != "en")
-bg = subprocess.Popen(
-    f"python scripts/run_eval.py --model {MODEL} --name base-plain --policy plain --langs {base_langs} "
-    f"--out {OUT}/runs/base-plain && python scripts/run_eval.py --model {MODEL} --name base-idibo-rag --policy idibo "
-    f"--rag --langs {base_langs} --out {OUT}/runs/base-idibo-rag",
-    shell=True, env=env1)
+PY = sys.executable
+ev = lambda name, langs, extra: (f"{PY} scripts/run_eval.py --model {MODEL} {extra} --name {name} "
+                                 f"--langs {langs} --out {OUT}/runs/{name}")
+train = lambda v: (f"[ -f {OUT}/adapters/{v}/adapter_config.json ] || "
+                   f"{PY} scripts/train_lora.py --model {MODEL} --data data/train/{v}.jsonl --out {OUT}/adapters/{v}")
+wait_idibo = f"while [ ! -f {OUT}/adapters/idibo/adapter_config.json ]; do sleep 60; done"
+rag = "--policy idibo --rag"
 
-import torch
-from datasets import Dataset
-from peft import LoraConfig, get_peft_model
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import SFTConfig
-from aligntune.backends.trl.raft.raft_trainer import RaftTrainer, RaftTrainerConfig
-
-for variant in VARIANTS:
-    t0 = time.time()
-    rows = [json.loads(l) for l in open(f"data/train/{variant}.jsonl", encoding="utf-8")]
-    ds = Dataset.from_list([{"prompt": r["prompt"], "completion": r["completion"]} for r in rows])
-    print(f"== {variant}: {len(ds)} examples", flush=True)
-    tok = AutoTokenizer.from_pretrained(MODEL)
-    if tok.pad_token is None:
-        tok.pad_token = tok.eos_token
-    model = AutoModelForCausalLM.from_pretrained(MODEL, dtype=torch.float16).to("cuda")
-    model.gradient_checkpointing_enable()
-    model.enable_input_require_grads()
-    model = get_peft_model(model, LoraConfig(
-        r=16, lora_alpha=32, lora_dropout=0.05, task_type="CAUSAL_LM",
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]))
-    model.print_trainable_parameters()
-    args = SFTConfig(
-        output_dir=f"{OUT}/ckpt/{variant}", num_train_epochs=2, per_device_train_batch_size=1,
-        gradient_accumulation_steps=8, learning_rate=1e-4, lr_scheduler_type="cosine", warmup_steps=0.05,
-        logging_steps=10, save_strategy="no", fp16=True, max_length=2048, completion_only_loss=True,
-        report_to="none", seed=42, gradient_checkpointing=True,
-    )
-    trainer = RaftTrainer(model=model, processing_class=tok, args=args, train_dataset=ds,
-                          raft_config=RaftTrainerConfig(max_golden_docs=1, max_distractor_docs=3))
-    trainer.train()
-    adir = f"{OUT}/adapters/{variant}"
-    model.save_pretrained(adir)
-    tok.save_pretrained(adir)
-    json.dump(trainer.state.log_history, open(f"{adir}/log_history.json", "w"), indent=1)
-    print(f"== {variant} trained in {(time.time() - t0) / 60:.1f} min", flush=True)
-    del trainer, model
-    torch.cuda.empty_cache()
-    sh(f"python scripts/run_eval.py --model {MODEL} --adapter {adir} --name {variant}-rag --policy idibo --rag "
-       f"--langs {EVAL_LANGS} --out {OUT}/runs/{variant}-rag")
-
-bg.wait()
+gpu0 = " && ".join([
+    train("civic"), train("idibo"),
+    ev("idibo-rag", "en,pcm", f"--adapter {OUT}/adapters/idibo {rag}"),
+])
+gpu1 = " && ".join([
+    f"while [ ! -f {OUT}/adapters/civic/adapter_config.json ]; do sleep 60; done",
+    ev("civic-rag", LANGS, f"--adapter {OUT}/adapters/civic {rag}"),
+    ev("base-idibo-rag", "pcm,yo,ha", rag),
+    ev("base-plain", "pcm,yo,ha", "--policy plain"),
+    wait_idibo,
+    ev("idibo-rag", "yo,ha", f"--adapter {OUT}/adapters/idibo {rag}"),
+])
+procs = []
+for gpu, cmd in ((0, gpu0), (1, gpu1)):
+    print(f"+ [GPU {gpu}] {cmd}", flush=True)
+    log = open(f"{OUT}/gpu{gpu}.log", "w")
+    procs.append(subprocess.Popen(cmd, shell=True, env=dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu)),
+                                  stdout=log, stderr=subprocess.STDOUT))
+t0 = time.time()
+while any(p.poll() is None for p in procs):
+    time.sleep(300)
+    done = {f.split("/runs/")[1]: sum(1 for _ in open(f)) for f in glob.glob(f"{OUT}/runs/*/*.jsonl")}
+    print(f"[{(time.time() - t0) / 60:.0f} min] {done}", flush=True)
+for gpu, p in enumerate(procs):
+    print(f"GPU {gpu} exit {p.returncode}; last lines:", flush=True)
+    print("".join(open(f"{OUT}/gpu{gpu}.log").readlines()[-15:]), flush=True)
+shutil.rmtree(f"{OUT}/adapters/idibo-ckpt", ignore_errors=True)
+shutil.rmtree(f"{OUT}/adapters/civic-ckpt", ignore_errors=True)
+assert all(p.returncode == 0 for p in procs), "a GPU chain failed; see gpu*.log"
 print("all done", flush=True)
