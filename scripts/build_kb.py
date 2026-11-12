@@ -43,24 +43,49 @@ def act_chunks() -> list[dict]:
     reader = PdfReader(KB / "act" / "nass.pdf")
     text = "\n".join(p.extract_text() or "" for p in reader.pages)
     text = re.sub(r"[ \t]+", " ", text)
-    # Section headings in the gazette look like: "\n47.—(1) ..." or "\n47. ..."
-    parts = re.split(r"\n(?=(\d{1,3})\.\s?[—-]?\s?(?:\(1\)|[A-Z]))", text)
-    chunks, sec = [], "preamble"
-    body = parts[0]
-    pieces = [("preamble", body)]
-    for i in range(1, len(parts) - 1, 2):
-        pieces.append((parts[i], parts[i + 1]))
-    for sec, body in pieces:
-        for j, piece in enumerate(split_long(body)):
-            chunks.append({
-                "id": f"act-s{sec}-{j}",
-                "source": "Electoral Act, 2026 (Official Gazette No. 40, Vol. 113, 2 March 2026)",
-                "url": ACT_URL,
-                "title": "Electoral Act, 2026",
-                "section": f"Section {sec}" if sec != "preamble" else "Preamble / arrangement",
-                "published": "2026-03-02",
-                "text": piece.strip(),
-            })
+    # The gazette has three parts with their own numbering, so they must not share ids:
+    #   arrangement of sections (a table of contents: "47. Accreditation ..." lines),
+    #   the Act's body (sections 1..N, "47.—(1) ..."),
+    #   the schedules (First Schedule paragraphs restart at 1, then forms).
+    body_start = re.search(r"\n1\.\s?[—-]\s?\(1\)", text).start()
+    sched_start = text.index("\nSCHEDULES\nFIRST SCHEDULE")
+    forms_start = text.index("FORM TF 001")
+    parts_spec = [
+        ("arrangement", text[:body_start], None, "Arrangement of sections"),
+        ("s", text[body_start:sched_start], r"\n(?=(\d{1,3})\.\s?(?:[—-]\s?)?\(1\))|\n(?=(\d{1,3})\.\s?[—-]\s?\()|\n(?=(\d{1,3})\.\s(?=[A-Z]))", "Section {n}"),
+        ("sched1-p", text[sched_start:forms_start], r"\n(?=(\d{1,3})\.\s?[—-]\s?\()|\n(?=(\d{1,3})\.\s(?=[A-Z]))", "First Schedule (election petition rules), paragraph {n}"),
+        ("forms", text[forms_start:], None, "Schedules: forms and oaths"),
+    ]
+    chunks: list[dict] = []
+    for prefix, part, pattern, label in parts_spec:
+        pieces: list[tuple[str, str]] = []
+        if pattern is None:
+            pieces = [("", part)]
+        else:
+            last, cur_n = 0, "0"
+            for m in re.finditer(pattern, part):
+                pieces.append((cur_n, part[last:m.start()]))
+                cur_n, last = next(g for g in m.groups() if g), m.start()
+            pieces.append((cur_n, part[last:]))
+        merged: dict[str, list[str]] = {}
+        for n, body in pieces:  # a section can be split by page furniture; merge by number
+            merged.setdefault(n, []).append(body)
+        for n, bodies in merged.items():
+            for j, piece in enumerate(split_long("\n".join(bodies))):
+                if len(piece.strip()) < 40:
+                    continue
+                chunks.append({
+                    "id": f"act-{prefix}{n}-{j}" if pattern else f"act-{prefix}-{j}",
+                    "source": "Electoral Act, 2026 (Official Gazette No. 40, Vol. 113, 2 March 2026)",
+                    "url": ACT_URL,
+                    "title": "Electoral Act, 2026",
+                    "section": label.format(n=n) if pattern else label,
+                    "published": "2026-03-02",
+                    "text": piece.strip(),
+                })
+    ids = [c["id"] for c in chunks]
+    dupes = {i for i in ids if ids.count(i) > 1}
+    assert not dupes, f"duplicate chunk ids: {sorted(dupes)[:10]}"
     return chunks
 
 
