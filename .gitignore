@@ -6,3 +6,4 @@ runs/
 adapters/
 models/
 build/
+.DS_Store

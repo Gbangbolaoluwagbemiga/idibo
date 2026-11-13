@@ -34,6 +34,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
+from idibo.pivot import PIVOT_LANGS, clean_pivot, pivot_messages, search_query  # noqa: E402
 from idibo.retrieve import HybridKB, format_context  # noqa: E402
 from run_eval import SYSTEM  # noqa: E402  (same policy the model was trained and evaluated with)
 
@@ -75,6 +76,18 @@ class Generator:
         yield ""
 
 
+async def complete(messages: list[dict], max_tokens: int = 60) -> str:
+    g = gen()
+    if hasattr(g, "complete"):
+        return await g.complete(messages, max_tokens)
+    out = ""
+    async for piece in g.stream(messages):
+        out += piece
+        if len(out) > 400:
+            break
+    return out
+
+
 class CohereDev(Generator):
     label = "dev backend: base tiny-aya-earth via Cohere API (not the fine-tuned model)"
 
@@ -101,8 +114,21 @@ class LlamaCpp(Generator):
     def __init__(self):
         from llama_cpp import Llama
 
-        self.llm = Llama(model_path=os.environ["IDIBO_GGUF"], n_ctx=4096, n_threads=os.cpu_count() or 2,
-                         n_gpu_layers=int(os.environ.get("IDIBO_GPU_LAYERS", "-1")), verbose=False)  # Metal on a Mac; CPU on a Space
+        from llama_cpp import LlamaRAMCache
+
+        # Containers often report the host's cores, not the quota: too many threads makes CPU inference crawl.
+        self.threads = int(os.environ.get("IDIBO_THREADS") or min(os.cpu_count() or 2, 8))
+        self.llm = Llama(model_path=os.environ["IDIBO_GGUF"], n_ctx=4096, n_threads=self.threads,
+                         n_threads_batch=self.threads, n_batch=512,
+                         n_gpu_layers=int(os.environ.get("IDIBO_GPU_LAYERS", "-1")), verbose=False)  # Metal on a Mac; CPU on a server
+        self.llm.set_cache(LlamaRAMCache(capacity_bytes=1 << 30))  # reuse the shared system-prompt prefix
+        self.lock = asyncio.Lock()
+
+    async def complete(self, messages, max_tokens=60):
+        async with self.lock:
+            r = await asyncio.to_thread(self.llm.create_chat_completion, messages=messages, max_tokens=max_tokens,
+                                        temperature=0)
+        return r["choices"][0]["message"]["content"]
 
     async def stream(self, messages):
         loop = asyncio.get_running_loop()
@@ -115,9 +141,10 @@ class LlamaCpp(Generator):
                     loop.call_soon_threadsafe(q.put_nowait, delta)
             loop.call_soon_threadsafe(q.put_nowait, None)
 
-        loop.run_in_executor(None, run)
-        while (tok := await q.get()) is not None:
-            yield tok
+        async with self.lock:  # one llama.cpp context: never run two generations at once
+            loop.run_in_executor(None, run)
+            while (tok := await q.get()) is not None:
+                yield tok
 
 
 class HFLocal(Generator):
@@ -184,7 +211,13 @@ async def ask(req: Ask):
         raise HTTPException(400, "empty question")
     if req.mode == "check":
         q = CHECK_PREFIX.get(req.lang, CHECK_PREFIX["en"]) + q
-    hits = kb().search(q, k=4)
+    english = ""
+    if req.lang in PIVOT_LANGS and BACKEND != "cohere":  # the sources are English: search with a translation too
+        try:
+            english = clean_pivot(await complete(pivot_messages(req.question.strip()[:600], req.lang)))
+        except Exception:
+            english = ""
+    hits = kb().search(search_query(q, english), k=4)
     user = f"SOURCES:\n{format_context(hits)}\n\nQUESTION:\n{q}"
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
     sources = [{"id": h["id"], "title": h["title"], "section": h.get("section", ""), "url": h["url"]} for h in hits]
@@ -225,6 +258,8 @@ async def tts(req: TTS):
         raise HTTPException(503, "voice is not configured")
     text = re.sub(r"\[[a-z0-9-]+\]", "", req.text)  # don't read citation ids aloud
     text = re.sub(r"[*#_`]", "", text).strip()[:1500]
+    if len(text) < 20:  # YarnGPT's minimum is 20 characters; trailing pause marks are silent
+        text = text.ljust(19) + "......"
     voice = VOICE.get(req.lang, "femi")
     h = hashlib.sha256(f"{voice}|{req.lang}|{text}".encode()).hexdigest()[:24]
     path = CACHE / f"{h}.mp3"
@@ -236,11 +271,11 @@ async def tts(req: TTS):
             if r.status_code >= 400:
                 raise HTTPException(502, "voice service error")
             job = r.json()
-            for _ in range(60):
+            for _ in range(150):  # poll often: most short chunks are ready in 1-3 s
                 s = (await c.get(f"{YARN}/status/{job['job_id']}", headers=hdr)).json()
                 if s.get("status") in ("completed", "failed"):
                     break
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.4)
             if s.get("status") != "completed":
                 raise HTTPException(502, "voice not ready")
             audio = await c.get(s["audio_url"])
@@ -332,7 +367,10 @@ def judge_view():
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "backend": BACKEND, "langs": LANGS}
+    info = {"ok": True, "backend": BACKEND, "langs": LANGS, "cpus": os.cpu_count()}
+    if _gen is not None and hasattr(_gen, "threads"):
+        info["threads"] = _gen.threads
+    return info
 
 
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

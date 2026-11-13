@@ -208,3 +208,7 @@ textarea:focus { border-color: var(--green); outline: none; }
 
 @media (max-width: 360px) { .cards { grid-template-columns: 1fr; } .mic { width: 112px; height: 112px; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.loading { opacity: .6; animation: pulse 1s ease-in-out infinite; }
+.failed { outline: 2px solid var(--danger, #c0392b); }
+.beta { display: block; font-style: normal; font-size: 11px; letter-spacing: .02em; color: var(--ink-2, #9aa); margin-top: 2px; }

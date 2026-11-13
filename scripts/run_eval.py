@@ -62,12 +62,27 @@ def main() -> None:
     ap.add_argument("--device", default=None)
     ap.add_argument("--batch", type=int, default=8, help="questions generated together (left-padded)")
     ap.add_argument("--out", help="output directory (default: runs/<name>)")
+    ap.add_argument("--bench", default="data/bench", help="benchmark folder: data/bench (v1) or data/bench2")
+    ap.add_argument("--pivot", action="store_true",
+                    help="yo/ha/ig: also search with the model's own English translation of the question (idibo/pivot.py)")
     a = ap.parse_args()
 
     import torch
 
     device = a.device or ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     tok, model = load(a.model, a.adapter, device)
+    from idibo.pivot import PIVOT_LANGS, clean_pivot, pivot_messages, search_query
+
+    def generate(msg_lists, max_new_tokens):
+        tok.padding_side = "left"
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
+        texts = [tok.apply_chat_template(m, add_generation_prompt=True, tokenize=False) for m in msg_lists]
+        enc = tok(texts, return_tensors="pt", padding=True, add_special_tokens=False).to(device)
+        with torch.no_grad():
+            g = model.generate(**enc, max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=tok.pad_token_id)
+        return [tok.decode(g[j, enc["input_ids"].shape[1]:], skip_special_tokens=True) for j in range(len(texts))]
+
     kb = None
     if a.rag:
         from idibo.retrieve import HybridKB, format_context
@@ -78,7 +93,7 @@ def main() -> None:
     out_dir = Path(a.out) if a.out else ROOT / "runs" / a.name
     out_dir.mkdir(parents=True, exist_ok=True)
     for lang in a.langs.split(","):
-        bench = [json.loads(l) for l in open(ROOT / f"data/bench/{lang}.jsonl", encoding="utf-8")]
+        bench = [json.loads(l) for l in open(ROOT / a.bench / f"{lang}.jsonl", encoding="utf-8")]
         if a.limit:
             bench = bench[: a.limit]
         done = set()
@@ -93,10 +108,14 @@ def main() -> None:
             for b in range(0, len(todo), a.batch):
                 chunk = todo[b: b + a.batch]
                 texts, ctxs = [], []
-                for it in chunk:
+                english = [""] * len(chunk)
+                if kb and a.pivot and lang in PIVOT_LANGS:
+                    english = [clean_pivot(x) for x in generate(
+                        [pivot_messages(it["prompt"], lang) for it in chunk], max_new_tokens=60)]
+                for it, en in zip(chunk, english):
                     user, ctx_ids = it["prompt"], []
                     if kb:
-                        hits = kb.search(it["prompt"], k=4)
+                        hits = kb.search(search_query(it["prompt"], en), k=4)
                         ctx_ids = [h["id"] for h in hits]
                         user = f"SOURCES:\n{format_context(hits)}\n\nQUESTION:\n{it['prompt']}"
                     msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -113,7 +132,8 @@ def main() -> None:
                     resp = tok.decode(gen[j, n_in:], skip_special_tokens=True).strip()
                     rec = {k: it.get(k) for k in ("id", "kind", "category", "pair", "swap")}
                     rec.update(lang=lang, prompt=it["prompt"], response=resp, context_ids=ctxs[j], model=a.model,
-                               adapter=a.adapter, rag=a.rag, policy=a.policy, seconds=secs)
+                               adapter=a.adapter, rag=a.rag, policy=a.policy, seconds=secs, bench=a.bench,
+                               pivot_en=english[j] or None)
                     f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                     print(f"[{lang}] {it['id']:<28} {secs:>5}s  {resp[:90]!r}", flush=True)
                 f.flush()

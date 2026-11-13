@@ -22,39 +22,85 @@
   }
 
   // ---------------------------------------------------------------- voice out (YarnGPT via /api/tts)
+  // Long answers are cut into sentence chunks: the first chunk plays as soon as it is ready while the next is fetched,
+  // so people hear something in a few seconds instead of waiting for the whole answer to be voiced.
+  // No browser-voice fallback: it reads Nigerian languages with a foreign (e.g. macOS) voice, which is worse than silence.
   const ttsCache = new Map();
-  async function speak(text, btn) {
-    if (playingBtn === btn && !player.paused) { stopAudio(); return; }
-    stopAudio();
-    try {
-      setPlaying(btn, "loading");
-      let url = ttsCache.get(lang + text);
-      if (!url) {
-        const r = await fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, lang }) });
-        if (!r.ok) throw new Error("tts");
-        url = URL.createObjectURL(await r.blob());
-        ttsCache.set(lang + text, url);
-      }
+  let speakRun = 0;
+  function chunks(text) {
+    const parts = text.replace(/\[[a-z0-9-]+\]/g, "").match(/[^.!?\n]+[.!?]*\s*/g) || [text];
+    const out = [];
+    let cur = "";
+    for (const p of parts) {
+      if (cur && (cur + p).length > (out.length ? 240 : 110)) { out.push(cur.trim()); cur = ""; }
+      cur += p;
+    }
+    if (cur.trim()) {
+      // YarnGPT rejects pieces under 20 characters: fold a short tail into the previous piece
+      if (out.length && cur.trim().length < 40) out[out.length - 1] += " " + cur.trim(); else out.push(cur.trim());
+    }
+    return out;
+  }
+  function tts(text, code) {
+    const key = code + "|" + text;
+    if (!ttsCache.has(key)) {
+      const p = fetch("/api/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, lang: code }) })
+        .then((r) => { if (!r.ok) throw new Error("tts"); return r.blob(); })
+        .then((b) => URL.createObjectURL(b));
+      p.catch(() => ttsCache.delete(key));  // let a later tap retry
+      ttsCache.set(key, p);
+    }
+    return ttsCache.get(key);
+  }
+  // Start voicing an answer in the background (before anyone taps), so the speaker button plays at once.
+  function prefetch(text, code = lang) { chunks(text).slice(0, 2).forEach((c) => tts(c, code).catch(() => {})); }
+  function playUrl(url, run) {
+    return new Promise((resolve, reject) => {
+      if (run !== speakRun) return resolve(false);
       player.src = url;
-      await player.play();
-      setPlaying(btn, "playing");
-    } catch {
-      // Fallback: the browser's own voice (works offline; may not know the language well).
-      if ("speechSynthesis" in window) {
-        const u = new SpeechSynthesisUtterance(text.replace(/\[[a-z0-9-]+\]/g, ""));
-        u.lang = LANGS.find((l) => l.code === lang)?.speech ?? "en-NG";
-        u.onend = () => setPlaying(null);
-        speechSynthesis.speak(u);
+      player.onended = () => resolve(true);
+      player.onerror = () => reject(new Error("audio"));
+      player.play().catch(reject);
+    });
+  }
+  async function speak(text, btn, code = lang) {
+    if (playingBtn === btn && (!player.paused || btn?.classList.contains("loading"))) { stopAudio(); return; }
+    stopAudio();
+    const run = ++speakRun;
+    const list = chunks(text);
+    setPlaying(btn, "loading");
+    try {
+      for (let i = 0; i < list.length; i++) {
+        const url = await tts(list[i], code);
+        if (list[i + 1]) tts(list[i + 1], code).catch(() => {});  // fetch the next chunk while this one plays
+        if (run !== speakRun) return;
         setPlaying(btn, "playing");
-      } else setPlaying(null);
+        if (!(await playUrl(url, run))) return;
+      }
+      if (run === speakRun) setPlaying(null);
+    } catch (e) {
+      if (run !== speakRun) return;
+      setPlaying(null);
+      // Autoplay blocked (no tap yet): leave the Listen button for the user. Anything else: say voice is unavailable.
+      if (e?.name !== "NotAllowedError") showVoiceError(btn);
     }
   }
-  function stopAudio() { player.pause(); if ("speechSynthesis" in window) speechSynthesis.cancel(); setPlaying(null); }
-  player.addEventListener("ended", () => setPlaying(null));
+  function showVoiceError(btn) {
+    if (!btn) return;
+    btn.classList.add("failed");
+    btn.title = t("voiceOutLater");
+    setTimeout(() => btn.classList.remove("failed"), 2500);
+  }
+  // Unlock audio on the first tap so answers can start speaking on their own later (Safari/iOS block that otherwise).
+  document.addEventListener("pointerdown", function unlock() {
+    document.removeEventListener("pointerdown", unlock);
+    try { const a = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="); a.play().catch(() => {}); } catch {}
+  }, { once: true });
+  function stopAudio() { speakRun++; player.pause(); setPlaying(null); }
   function setPlaying(btn, state) {
-    if (playingBtn && playingBtn !== btn) { playingBtn.classList.remove("playing"); setListenLabel(playingBtn, false); }
+    if (playingBtn && playingBtn !== btn) { playingBtn.classList.remove("playing", "loading"); setListenLabel(playingBtn, false); }
     playingBtn = btn;
-    if (btn) { btn.classList.toggle("playing", state === "playing"); setListenLabel(btn, state === "playing"); }
+    if (btn) { btn.classList.toggle("playing", state === "playing"); btn.classList.toggle("loading", state === "loading"); setListenLabel(btn, state === "playing"); }
   }
   function setListenLabel(btn, on) {
     if (!btn?.classList.contains("listen")) return;
@@ -70,13 +116,14 @@
       row.setAttribute("role", "listitem");
       row.innerHTML = `<div class="lang" style="--lc:${l.color}">
           <button class="swatch" aria-hidden="true" tabindex="-1">${l.name.slice(0, 2)}</button>
-          <button class="names pick" aria-label="${l.name}"><b>${l.name}</b><span>${l.hello}</span></button>
+          <button class="names pick" aria-label="${l.name}"><b>${l.name}</b><span>${l.hello}</span>${l.beta ? `<em class="beta">${l.beta}</em>` : ""}</button>
           <button class="say" aria-label="Hear ${l.name}"><span class="i i-speaker" aria-hidden="true"></span></button>
         </div>`;
       const choose = () => { lang = l.code; store.set("idibo.lang", lang); $("#langPicker").hidden = true; applyText(); go("home"); };
       row.querySelector(".pick").onclick = choose;
       row.querySelector(".swatch").onclick = choose;
-      row.querySelector(".say").onclick = (e) => { const prev = lang; lang = l.code; speak(`${l.hello}. ${l.name}.`, e.currentTarget); lang = prev; };
+      row.querySelector(".say").onclick = (e) => speak(l.say, e.currentTarget, l.code);
+      prefetch(l.say, l.code);
       grid.append(row);
     }
     $("#langPicker").hidden = false;
@@ -236,7 +283,7 @@
     if (backend && !backend.startsWith("Ìdìbò")) {
       const n = document.createElement("div"); n.className = "backend-note"; n.textContent = backend; box.append(n);
     }
-    if (voiceOn) speak(clean(full), listenBtn);
+    if (voiceOn) speak(clean(full), listenBtn); else prefetch(clean(full));
     box.scrollIntoView({ behavior: "smooth", block: "end" });
   }
   function shortSource(s) {

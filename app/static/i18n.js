@@ -1,11 +1,11 @@
 // UI text in five languages. Keep it short: pictures and voice carry the meaning.
 // Yorùbá and Naijá are checked by a native speaker; Hausa and Igbo are drafts awaiting review (see README).
 window.LANGS = [
-  { code: "yo", name: "Yorùbá", hello: "Ẹ káàbọ̀", color: "#0B6B43", speech: "yo-NG" },
-  { code: "ha", name: "Hausa", hello: "Sannu", color: "#1F5FA8", speech: "ha-NG" },
-  { code: "ig", name: "Igbo", hello: "Nnọọ", color: "#B4472E", speech: "ig-NG" },
-  { code: "pcm", name: "Naijá (Pidgin)", hello: "How far", color: "#7A4CB8", speech: "en-NG" },
-  { code: "en", name: "English", hello: "Welcome", color: "#3D4A43", speech: "en-NG" },
+  { code: "yo", name: "Yorùbá", hello: "Ẹ káàbọ̀", say: "Ẹ káàbọ̀. Èyí ni èdè Yorùbá.", color: "#0B6B43", speech: "yo-NG" },
+  { code: "ha", name: "Hausa", hello: "Sannu", say: "Sannu. Wannan shi ne harshen Hausa.", color: "#1F5FA8", speech: "ha-NG" },
+  { code: "ig", name: "Igbo", hello: "Nnọọ", say: "Nnọọ. Nke a bụ asụsụ Igbo.", beta: "Beta · not trained on Igbo", color: "#B4472E", speech: "ig-NG" },
+  { code: "pcm", name: "Naijá (Pidgin)", hello: "How far", say: "How far. Na Naijá Pidgin be dis.", color: "#7A4CB8", speech: "en-NG" },
+  { code: "en", name: "English", hello: "Welcome", say: "Welcome. This is English.", color: "#3D4A43", speech: "en-NG" },
 ];
 
 window.T = {
@@ -19,6 +19,7 @@ window.T = {
     listen: "Listen", stop: "Stop", sources: "From", openOfficial: "Open the official page",
     footer: "Free civic tool. Never tells you who to vote for.", error: "Sorry, something went wrong. Please try again.",
     voiceLater: "Voice questions aren't working right now. Tap a picture or type.",
+    voiceOutLater: "The voice isn't available right now. Please try again.",
     micBlocked: "Allow the microphone, then tap again.", noSpeech: "I didn't hear a question. Tap and try again.", understanding: "Understanding…",
     cards: [
       ["calendar", "When is the 2027 election?"],
@@ -39,6 +40,7 @@ window.T = {
     listen: "Hear am", stop: "Stop", sources: "From", openOfficial: "Open the official page",
     footer: "Free tool for citizens. E no go ever tell you who to vote for.", error: "Sorry, something spoil. Try again.",
     voiceLater: "Voice question no dey work now. Press picture or type.",
+    voiceOutLater: "Voice no dey work now. Try again small time.",
     micBlocked: "Allow the microphone, then press am again.", noSpeech: "I no hear question. Press am, try again.", understanding: "I dey hear wetin you talk…",
     cards: [
       ["calendar", "When be the 2027 election?"],
@@ -59,6 +61,7 @@ window.T = {
     listen: "Gbọ́", stop: "Dúró", sources: "Láti", openOfficial: "Ṣí ojú-ìwé ìjọba",
     footer: "Irinṣẹ́ ọ̀fẹ́ fún aráàlú. Kò ní sọ ẹni tí o yóò dìbò fún.", error: "Ẹ má bínú, nǹkan kan ṣẹlẹ̀. Ẹ tún gbìyànjú.",
     voiceLater: "Ìbéèrè pẹ̀lú ohùn kò ṣiṣẹ́ báyìí. Tẹ àwòrán tàbí kọ ọ́.",
+    voiceOutLater: "Ohùn kò sí báyìí. Ẹ jọ̀ọ́ gbìyànjú lẹ́ẹ̀kan sí i.",
     micBlocked: "Gba gbohùngbohùn láàyè, kí o sì tún tẹ̀ ẹ́.", noSpeech: "Mi ò gbọ́ ìbéèrè kankan. Tún tẹ̀ ẹ́.", understanding: "Mo ń ṣàyẹ̀wò ohun tí o sọ…",
     cards: [
       ["calendar", "Ìgbà wo ni ìdìbò 2027?"],
@@ -79,6 +82,7 @@ window.T = {
     listen: "Saurara", stop: "Tsaya", sources: "Daga", openOfficial: "Buɗe shafin hukuma",
     footer: "Kayan aiki kyauta ga jama'a. Ba za ta faɗa maka wanda za ka zaɓa ba.", error: "Yi haƙuri, an samu matsala. Sake gwadawa.",
     voiceLater: "Tambaya da murya ba ta aiki yanzu. Taɓa hoto ko ka rubuta.",
+    voiceOutLater: "Murya ba ta samu yanzu ba. Don Allah a sake gwadawa.",
     micBlocked: "Ba da izinin makirufo, sannan ka sake taɓawa.", noSpeech: "Ban ji tambaya ba. Sake taɓawa.", understanding: "Ina fahimtar abin da ka faɗa…",
     cards: [
       ["calendar", "Yaushe ne zaɓen 2027?"],
@@ -99,6 +103,7 @@ window.T = {
     listen: "Gee ntị", stop: "Kwụsị", sources: "Site na", openOfficial: "Mepee peeji gọọmentị",
     footer: "Ngwa efu maka ụmụ amaala. Ọ gaghị agwa gị onye ị ga-atụ vootu.", error: "Ndo, ihe mebiri. Nwaa ọzọ.",
     voiceLater: "Ajụjụ olu anaghị arụ ọrụ ugbu a. Pịa foto ma ọ bụ dee.",
+    voiceOutLater: "Olu adịghị ugbu a. Biko nwaa ọzọ.",
     micBlocked: "Kwe ka igwe okwu rụọ ọrụ, wee pịa ọzọ.", noSpeech: "Anụghị m ajụjụ ọ bụla. Pịa ọzọ.", understanding: "Ana m aghọta ihe ị kwuru…",
     cards: [
       ["calendar", "Kedu mgbe ntuli aka 2027 ga-eme?"],
