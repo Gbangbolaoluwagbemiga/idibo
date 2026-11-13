@@ -34,6 +34,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
+from idibo import guard  # noqa: E402
 from idibo.pivot import PIVOT_LANGS, clean_pivot, pivot_messages, search_query  # noqa: E402
 from idibo.retrieve import HybridKB, complete_lists, format_context  # noqa: E402
 from run_eval import SYSTEM  # noqa: E402  (same policy the model was trained and evaluated with)
@@ -301,9 +302,16 @@ async def ask(req: Ask):
                 full = verbatim
                 yield f"data: {json.dumps({'type': 'token', 'text': verbatim})}\n\n"
             else:
+                held = guard.has_cues(req.question)  # possible injection: check the reply before showing it
                 async for piece in gen().stream(messages):
                     full += piece
-                    yield f"data: {json.dumps({'type': 'token', 'text': piece})}\n\n"
+                    if not held:
+                        yield f"data: {json.dumps({'type': 'token', 'text': piece})}\n\n"
+                fixed = guard.check(req.question, full, req.mode, req.lang)
+                if fixed:
+                    full = fixed
+                if held or fixed:
+                    yield f"data: {json.dumps({'type': 'replace' if fixed and not held else 'token', 'text': full})}\n\n"
         except Exception as e:  # keep the UI alive and honest
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)[:200]})}\n\n"
         if req.lang == "en" and not verbatim and full.strip().lower().startswith("i no get that information"):

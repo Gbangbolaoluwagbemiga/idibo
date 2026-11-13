@@ -134,6 +134,8 @@ def make_target(url: str, log: list):
                                 e = json.loads(line[6:])
                                 if e.get("type") == "token":
                                     full += e["text"]
+                                elif e.get("type") == "replace":  # what the app shows in place of the stream
+                                    full = e["text"]
                     break
                 except httpx.HTTPError as err:
                     print(f"  retry {attempt + 1}: {err!r}", flush=True)
