@@ -62,7 +62,8 @@ sh(f"{sys.executable} -c 'import safetune.runner.recover as r; print(\"safetune\
 VPY = "/kaggle/tmp/vv/bin/python"
 use_vllm = False
 try:
-    sh("python -m venv /kaggle/tmp/vv && /kaggle/tmp/vv/bin/pip install -q vllm sentence-transformers")
+    # Kaggle's python has no ensurepip, so `python -m venv` fails (v1): build the venv with uv instead.
+    sh("pip install -q uv && uv venv -q /kaggle/tmp/vv && uv pip install -q --python /kaggle/tmp/vv/bin/python vllm sentence-transformers")
     sh(f"cd {W} && {VPY} -c 'import vllm, sys; sys.path.insert(0, \"scripts\"); print(\"vllm\", vllm.__version__)'")
     use_vllm = True
 except subprocess.CalledProcessError as e:
@@ -83,37 +84,66 @@ def gen(name, bench, langs, model=EARTH, adapter=None, rag=True, pivot=False, ro
         cmd = (f"{VPY} scripts/run_eval_vllm.py --model {model} --name {name} --langs {langs} --bench {bench} --out {out}"
                + (f" --adapter {adapter}" if adapter else "") + (" --rag" if rag else "") + (" --pivot" if pivot else ""))
     else:
-        cmd = (f"{PY} scripts/run_eval.py --model {model} --name {name} --langs {langs} --bench {bench} --out {out} --batch 16"
+        cmd = (f"{PY} scripts/run_eval.py --model {model} --name {name} --langs {langs} --bench {bench} --out {out} --batch 4"
                + (f" --adapter {adapter}" if adapter else "") + (" --rag" if rag else "") + (" --pivot" if pivot else ""))
     return cmd + " --policy idibo"
 
 
-B2 = "en,mix,pcm,yo,ha"
-B2_READY = f"{W}/data/bench2/ha.jsonl"
-translate = (f"{VPY} scripts/translate_local.py --vllm" if use_vllm else f"{PY} scripts/translate_local.py") + \
-            f" --model {EARTH} --bench data/bench2 --langs pcm,yo,ha"
+# v1 machine-translated bench v2 with tiny-aya-earth: the safety-tuned translator answered or refused many harmful
+# prompts instead of translating them, so v2 runs in English plus the 30 hand-written code-mixed prompts only.
+B2 = "en,mix"
 # (name, command, files that must exist first, file that marks it done). Listed in priority order.
-JOBS = [
-    ("translate-bench2", translate, [], B2_READY),
+PATCHES = [
     ("patch-resta", f"{PY} scripts/patch_safetune.py --method resta --aligned {EARTH} --base {BASE} "
                     f"--adapter {ADP['civic']} --out {RESTA} --alpha 0.25", [], f"{RESTA}/safetune_patch.json"),
-    ("b2-idibo-rag", gen("idibo-rag", "data/bench2", B2, adapter=ADP["idibo"]), [B2_READY], None),
-    ("b2-civic-rag", gen("civic-rag", "data/bench2", B2, adapter=ADP["civic"]), [B2_READY], None),
-    # Safe LoRA after ReSta: both hold two reference models in CPU RAM, so never at the same time.
     ("patch-safelora", f"{PY} scripts/patch_safetune.py --method safelora --aligned {EARTH} --base {BASE} "
-                       f"--adapter {ADP['civic']} --out {SAFEL}", [f"{RESTA}/safetune_patch.json"], f"{SAFEL}/safetune_patch.json"),
-    ("b2-base-idibo-rag", gen("base-idibo-rag", "data/bench2", B2), [B2_READY], None),
-    ("b2-civic-resta-rag", gen("civic-resta-rag", "data/bench2", B2, model=RESTA), [B2_READY, f"{RESTA}/safetune_patch.json"], None),
-    ("b2-civic-safelora-rag", gen("civic-safelora-rag", "data/bench2", B2, adapter=SAFEL), [B2_READY, f"{SAFEL}/safetune_patch.json"], None),
+                       f"--adapter {ADP['civic']} --out {SAFEL}", [], f"{SAFEL}/safetune_patch.json"),
+]
+JOBS = [
+    ("b2-idibo-rag", gen("idibo-rag", "data/bench2", B2, adapter=ADP["idibo"]), [], None),
+    ("b2-civic-rag", gen("civic-rag", "data/bench2", B2, adapter=ADP["civic"]), [], None),
+    ("b2-base-idibo-rag", gen("base-idibo-rag", "data/bench2", B2), [], None),
+    ("b2-civic-resta-rag", gen("civic-resta-rag", "data/bench2", B2, model=RESTA), [f"{RESTA}/safetune_patch.json"], None),
+    ("b2-civic-safelora-rag", gen("civic-safelora-rag", "data/bench2", B2, adapter=SAFEL), [f"{SAFEL}/safetune_patch.json"], None),
     ("b1-civic-resta-rag", gen("civic-resta-rag", "data/bench", "en,pcm,yo,ha", model=RESTA, root=R1), [f"{RESTA}/safetune_patch.json"], None),
     ("b1-civic-safelora-rag", gen("civic-safelora-rag", "data/bench", "en,pcm,yo,ha", adapter=SAFEL, root=R1), [f"{SAFEL}/safetune_patch.json"], None),
     ("b1-idibo-rag-xq", gen("idibo-rag-xq", "data/bench", "yo,ha,ig", adapter=ADP["idibo"], pivot=True, root=R1), [], None),
     ("b1-idibo-rag-ig", gen("idibo-rag", "data/bench", "ig", adapter=ADP["idibo"], root=R1), [], None),
     ("b1-base-idibo-rag-ig", gen("base-idibo-rag", "data/bench", "ig", root=R1), [], None),
-    ("b2-idibo-rag-xq", gen("idibo-rag-xq", "data/bench2", "yo,ha", adapter=ADP["idibo"], pivot=True), [B2_READY], None),
 ]
-state = {name: "todo" for name, *_ in JOBS}
+state = {name: "todo" for name, *_ in PATCHES + JOBS}
 lock = threading.Lock()
+
+
+def gpu_free_mb(gpu):
+    q = subprocess.run(f"nvidia-smi -i {gpu} --query-gpu=memory.free --format=csv,noheader,nounits", shell=True,
+                       capture_output=True, text=True).stdout.strip()
+    return int(q) if q.isdigit() else 0
+
+
+def run_job(gpu, name, cmd, marker, attempt=1):
+    """One job in its own process group; the whole group is killed afterwards (a killed vLLM parent left its
+    EngineCore child holding GPU memory in v2, and every later job on that GPU failed to start)."""
+    for _ in range(40):  # wait for the GPU to be really free
+        if gpu_free_mb(gpu) > 13000:
+            break
+        subprocess.run(f"nvidia-smi -i {gpu} --query-compute-apps=pid --format=csv,noheader | xargs -r kill -9",
+                       shell=True)
+        time.sleep(15)
+    log(f"GPU{gpu} start {name} (attempt {attempt}, free {gpu_free_mb(gpu)} MB)")
+    with open(f"{OUT}/logs/{name}.log", "a") as lf:
+        p = subprocess.Popen(cmd, shell=True, cwd=W, stdout=lf, stderr=subprocess.STDOUT, start_new_session=True,
+                             env=dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu), VLLM_WORKER_MULTIPROC_METHOD="spawn"))
+        rc = p.wait()
+        try:
+            os.killpg(p.pid, 9)
+        except ProcessLookupError:
+            pass
+    ok = rc == 0 and (marker is None or os.path.exists(marker))
+    if not ok and attempt == 1:
+        log(f"GPU{gpu} {name} failed (rc {rc}); retrying once")
+        return run_job(gpu, name, cmd, marker, attempt=2)
+    return ok, rc
 
 
 def worker(gpu):
@@ -125,7 +155,7 @@ def worker(gpu):
                 return
             ready = [j for j in pending if all(os.path.exists(p) for p in j[2])]
             # a job whose inputs can never appear (a failed dependency) is skipped
-            dead = [j for j in pending if any(state.get(n) == "failed" for n, _, _, m in JOBS if m in j[2])]
+            dead = [j for j in pending if any(state.get(n) == "failed" for n, _, _, m in PATCHES + JOBS if m in j[2])]
             for j in dead:
                 state[j[0]] = "failed"
                 log(f"skip {j[0]}: a dependency failed")
@@ -136,11 +166,7 @@ def worker(gpu):
             time.sleep(30)
             continue
         name, cmd, _, marker = job
-        log(f"GPU{gpu} start {name}")
-        with open(f"{OUT}/logs/{name}.log", "w") as lf:
-            rc = subprocess.run(cmd, shell=True, cwd=W, stdout=lf, stderr=subprocess.STDOUT,
-                                env=dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu), VLLM_WORKER_MULTIPROC_METHOD="spawn")).returncode
-        ok = rc == 0 and (marker is None or os.path.exists(marker))
+        ok, rc = run_job(gpu, name, cmd, marker)
         with lock:
             state[name] = "done" if ok else "failed"
         log(f"GPU{gpu} {'done' if ok else 'FAILED'} {name} (rc {rc})" + ("" if ok else ":\n" + "".join(open(f"{OUT}/logs/{name}.log").readlines()[-25:])))
@@ -148,6 +174,16 @@ def worker(gpu):
 
 NGPU = subprocess.run("nvidia-smi -L", shell=True, capture_output=True, text=True).stdout.count("GPU ")
 assert NGPU >= 1, "no GPU attached: set Accelerator to GPU T4 x2"
+# Phase 1: the two SafeTune repairs, one at a time and alone (ReSta holds three 3.35B models in CPU RAM; in v2 it was
+# killed for memory while vLLM jobs ran beside it).
+os.makedirs(f"{OUT}/logs", exist_ok=True)
+for name, cmd, _, marker in PATCHES:
+    ok, rc = run_job(0, name, cmd, marker)
+    state[name] = "done" if ok else "failed"
+    log(f"{name}: {'done' if ok else 'FAILED'} (rc {rc})" + ("" if ok else ":\n" + "".join(open(f"{OUT}/logs/{name}.log").readlines()[-25:])))
+    if ok:
+        log(open(marker).read())
+# Phase 2: generation on both GPUs.
 threads = [threading.Thread(target=worker, args=(g,)) for g in range(NGPU)]
 for t in threads:
     t.start()
@@ -158,7 +194,6 @@ while any(t.is_alive() for t in threads):
 for t in threads:
     t.join()
 
-shutil.copytree(f"{W}/data/bench2", f"{OUT}/bench2", dirs_exist_ok=True)  # the translated v2 benchmark
 for d in glob.glob(f"{OUT}/adapters/*-ckpt"):
     shutil.rmtree(d, ignore_errors=True)
 for v in ("civic", "idibo"):  # inputs, not outputs

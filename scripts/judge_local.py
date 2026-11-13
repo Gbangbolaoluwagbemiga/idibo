@@ -71,7 +71,7 @@ def main() -> None:
     a = ap.parse_args()
     from vllm import LLM, SamplingParams
 
-    llm = LLM(model=a.model, dtype="half", max_model_len=4096, gpu_memory_utilization=0.88,
+    llm = LLM(model=a.model, dtype="half", max_model_len=4096, gpu_memory_utilization=0.85,
               tensor_parallel_size=a.tp, seed=0)
     tok = llm.get_tokenizer()
 

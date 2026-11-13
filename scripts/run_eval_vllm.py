@@ -40,7 +40,7 @@ def main() -> None:
     from idibo.pivot import PIVOT_LANGS, clean_pivot, pivot_messages, search_query
 
     t0 = time.time()
-    llm = LLM(model=a.model, dtype="half", max_model_len=4096, gpu_memory_utilization=0.88, enable_lora=bool(a.adapter),
+    llm = LLM(model=a.model, dtype="half", max_model_len=4096, gpu_memory_utilization=0.85, enable_lora=bool(a.adapter),
               max_lora_rank=16, enforce_eager=False, seed=0)
     lora = LoRARequest("adapter", 1, a.adapter) if a.adapter else None
     tok = llm.get_tokenizer()

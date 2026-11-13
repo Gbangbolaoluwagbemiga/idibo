@@ -27,7 +27,9 @@ os.makedirs(W, exist_ok=True)
 if tars:
     tarfile.open(tars[0]).extractall(W)
 else:
-    found = glob.glob("/kaggle/input/**/scripts/judge_local.py", recursive=True)
+    # Prefer the idibo-data dataset: the round-2 output also holds an older copy of the code.
+    found = sorted(glob.glob("/kaggle/input/**/scripts/judge_local.py", recursive=True),
+                   key=lambda f: ("idibo-data" not in f, len(f)))
     assert found, "attach crypticdev/idibo-data (round-2 version)"
     shutil.copytree(os.path.dirname(os.path.dirname(found[0])), W, dirs_exist_ok=True)
 
@@ -40,8 +42,6 @@ for d in sorted(glob.glob("/kaggle/input/*/runs") + glob.glob("/kaggle/input/*/*
     if os.path.isdir(d) and "/idibo/" not in d:
         log(f"merge {d}")
         shutil.copytree(d, f"{W}/{os.path.basename(d)}", dirs_exist_ok=True)
-for marker in glob.glob("/kaggle/input/**/bench2/ha.jsonl", recursive=True)[:1]:
-    shutil.copytree(os.path.dirname(marker), f"{W}/data/bench2", dirs_exist_ok=True)
 for d in ("runs", "runs2"):
     if os.path.isdir(f"{W}/{d}"):
         shutil.rmtree(f"{W}/{d}/smoke-batch", ignore_errors=True)
@@ -55,7 +55,7 @@ for f in glob.glob("/kaggle/input/**/*.graded.local.jsonl", recursive=True) + gl
 
 from kaggle_secrets import UserSecretsClient  # noqa: E402
 os.environ["HF_TOKEN"] = UserSecretsClient().get_secret("HF_TOKEN")
-sh("python -m venv /kaggle/tmp/vv && /kaggle/tmp/vv/bin/pip install -q vllm sentence-transformers")
+sh("pip install -q uv && uv venv -q /kaggle/tmp/vv && uv pip install -q --python /kaggle/tmp/vv/bin/python vllm sentence-transformers huggingface_hub")
 VPY = "/kaggle/tmp/vv/bin/python"
 
 

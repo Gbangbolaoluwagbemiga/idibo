@@ -32,6 +32,9 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--alpha", type=float, default=0.25)
     ap.add_argument("--threshold", type=float, default=0.5)
+    ap.add_argument("--layers-only", action="store_true",
+                    help="ReSta: apply the safety vector to the transformer layers only, not the 262k-token embedding "
+                         "(its fp32 temporaries ran a 15 GB T4 out of memory)")
     ap.add_argument("--num-proj", type=int, default=25,
                     help="Safe LoRA fallback: if no module falls under the threshold, project the N least-aligned ones")
     a = ap.parse_args()
@@ -45,16 +48,25 @@ def main() -> None:
     # Reference models stay on CPU in fp16 (3.35B each): the safety vector is formed one tensor at a time.
     base = AutoModelForCausalLM.from_pretrained(a.base, dtype=torch.float16)
     aligned = AutoModelForCausalLM.from_pretrained(a.aligned, dtype=torch.float16)
+    # ReSta adds the safety vector to every weight, including the 262k x 2048 embedding: on a 15 GB T4 that ran out
+    # of memory (round 2 v1), so it runs on CPU in fp16. Safe LoRA only touches the small LoRA matrices: GPU.
+    # (v3: on CPU the process was killed for RAM instead. Final: GPU, transformer layers only - see --layers-only.)
     ft = AutoModelForCausalLM.from_pretrained(a.aligned, dtype=gpu_dtype).to(dev)
     ft = PeftModel.from_pretrained(ft, a.adapter)
     info = {"method": a.method, "adapter": a.adapter}
     if a.method == "resta":
         ft = ft.merge_and_unload()  # theta_civic as full weights
-        recover.ReStaTrainer(ft, base_model=base, aligned_model=aligned, alpha=a.alpha, device=dev).apply()
+        if a.layers_only:  # same SafeTune function the trainer calls, with its parameter filter
+            from safetune.interventions.recover.resta import apply_resta
+
+            apply_resta(ft, base=base, aligned=aligned, alpha=a.alpha, dare=True, dare_seed=0, device=dev,
+                        param_filter=["model.layers."])
+        else:
+            recover.ReStaTrainer(ft, base_model=base, aligned_model=aligned, alpha=a.alpha, device=dev).apply()
         ft.save_pretrained(a.out, safe_serialization=True)
         if tok:
             tok.save_pretrained(a.out)
-        info.update(alpha=a.alpha, dare=True, output="full model")
+        info.update(alpha=a.alpha, dare=True, layers_only=a.layers_only, output="full model")
     else:
         before = {n: p.detach().clone() for n, p in ft.named_parameters() if "lora_B" in n}
         recover.SafeLoRATrainer(ft, base_model=base, aligned_model=aligned, threshold=a.threshold).apply()
