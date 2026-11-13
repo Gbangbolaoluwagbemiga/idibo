@@ -239,6 +239,9 @@ See the repository README: `scripts/` (data, training, evaluation, grading), `ka
   left as they are.
 - **Hallucinated detail.** Asked what to bring to the polling unit, it sometimes adds "ID or passport" (the requirement
   is the PVC).
+- **Invented contact details.** Some refusals name a fact-check web address and a hotline number that do not exist, and
+  give www.inec.gov.ng as INEC's domain (the real one is inecnigeria.org). Contact details should come only from the
+  knowledge base.
 - **The candidate list was added after evaluation.** INEC's final list of 2027 presidential candidates was missing from
   the original crawl. The app now shows it word for word from INEC's PDF (`scripts/add_candidates_kb.py`). Benchmarks
   were run on the 309-passage knowledge base without it.
