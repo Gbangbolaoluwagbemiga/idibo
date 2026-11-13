@@ -96,12 +96,13 @@ class CohereDev(Generator):
 
 
 class LlamaCpp(Generator):
-    label = "Ìdìbò (fine-tuned Tiny Aya Earth, running on CPU)"
+    label = "Ìdìbò (fine-tuned Tiny Aya Earth, 4-bit)"
 
     def __init__(self):
         from llama_cpp import Llama
 
-        self.llm = Llama(model_path=os.environ["IDIBO_GGUF"], n_ctx=4096, n_threads=os.cpu_count() or 2, verbose=False)
+        self.llm = Llama(model_path=os.environ["IDIBO_GGUF"], n_ctx=4096, n_threads=os.cpu_count() or 2,
+                         n_gpu_layers=int(os.environ.get("IDIBO_GPU_LAYERS", "-1")), verbose=False)  # Metal on a Mac; CPU on a Space
 
     async def stream(self, messages):
         loop = asyncio.get_running_loop()
