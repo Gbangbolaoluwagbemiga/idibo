@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from idibo.pivot import PIVOT_LANGS, clean_pivot, pivot_messages, search_query  # noqa: E402
-from idibo.retrieve import HybridKB, format_context  # noqa: E402
+from idibo.retrieve import HybridKB, complete_lists, format_context  # noqa: E402
 from run_eval import SYSTEM  # noqa: E402  (same policy the model was trained and evaluated with)
 
 BACKEND = os.environ.get("IDIBO_BACKEND", "cohere")
@@ -205,6 +205,53 @@ CHECK_PREFIX = {
 }
 
 
+# ------------------------------------------------------------------ official lists, shown verbatim
+# "Who are the candidates?" is answered with INEC's own list, word for word, in INEC's order: no generated names, no
+# party left out. (The fine-tune learned to answer "who will win"-style questions with "I don't know, ask INEC": it
+# declined list requests and answered APC's candidate but not LP's. Verbatim lines treat every party the same.)
+LIST_PREFIX = "inec-presidential-candidates-2027-"
+LIST_CUE = re.compile(r"candidat|running for|run for|contest|on the ballot|aspirant|takara|olùdíje|oludije|na-azọ|azo ọkwa|"
+                      r"azọ ọkwa|who dey run|who go run|who de run", re.I)
+LIST_HEAD = {
+    "en": "INEC's final list of presidential candidates for the 16 January 2027 election (19 parties, in INEC's order, "
+          "names as INEC prints them, surname first). Ìdìbò does not share photos; see the official list at the source below.",
+    "pcm": "Na INEC final list of presidential candidates for the 16 January 2027 election be dis (19 parties, as INEC "
+           "arrange am, surname first). Ìdìbò no dey share photo; check the official list for the source below.",
+    "yo": "Àkójọ ìkẹyìn INEC ti àwọn olùdíje ipò ààrẹ fún ìdìbò 16 Oṣù Kínní 2027 (ẹgbẹ́ 19, ní ìlànà INEC, orúkọ ìdílé "
+          "ṣáájú). Ìdìbò kì í pín àwòrán; wo àkójọ INEC níbi orísun ìsàlẹ̀.",
+    "ha": "Jerin ƙarshe na INEC na 'yan takarar shugaban ƙasa na zaɓen 16 ga Janairu 2027 (jam'iyyu 19, bisa tsarin INEC, "
+          "sunan iyali farko). Ìdìbò ba ya raba hotuna; duba jerin INEC a tushen da ke ƙasa.",
+    "ig": "Ndepụta ikpeazụ INEC nke ndị na-azọ ọkwa onye isi ala maka ntuli aka nke 16 Jenụwarị 2027 (otu 19, n'usoro "
+          "INEC, aha nna mbụ). Ìdìbò anaghị ekesa foto; lee ndepụta INEC n'isi mmalite dị n'okpuru.",
+}
+ADVICE = re.compile(r"\bshould\b|vote for|better|best|trust|support|recommend|endorse|good|bad|win|yẹ kí|ya kamata|kwesịrị|"
+                    r"suppose vote|make I vote", re.I)  # advice and predictions go to the model, which stays neutral
+MATE = {"en": "running mate", "pcm": "running mate", "yo": "igbákejì", "ha": "mataimaki", "ig": "osote"}
+
+
+def official_list(question: str, english: str, raw_hits: list[dict], lang: str) -> str | None:
+    text = f"{question} {english}"
+    if not any(h["id"].startswith(LIST_PREFIX) for h in raw_hits) or not LIST_CUE.search(text) or ADVICE.search(text):
+        return None
+    parts = [d for d in kb().docs if d["id"].startswith(LIST_PREFIX)]
+    lines, where = [], {}
+    for d in parts:
+        for l in d["text"].split("\n")[1:]:
+            lines.append(l)
+            where[l] = d["id"]
+    parties = {l.split(":")[0] for l in lines}
+    words = set(re.findall(r"[A-Za-z]+", f"{question} {english}"))
+    asked = parties & {w.upper() for w in words if w.upper() in parties and (w.isupper() or len(w) > 3)}
+    if asked:  # about specific parties: the same verbatim lines, so every party is answered the same way
+        lines = [l for l in lines if l.split(":")[0] in asked]
+    body = "\n".join("- " + l.replace("running mate", MATE.get(lang, "running mate")) for l in lines)
+    head = LIST_HEAD.get(lang, LIST_HEAD["en"])
+    if asked:
+        head = head.split(" (")[0] + ":"
+    cites = " ".join(f"[{i}]" for i in dict.fromkeys(where[l] for l in lines))
+    return f"{head}\n\n{body}\n\n{cites}"
+
+
 @app.post("/api/ask")
 async def ask(req: Ask):
     q = req.question.strip()[:1200]
@@ -218,7 +265,14 @@ async def ask(req: Ask):
             english = clean_pivot(await complete(pivot_messages(req.question.strip()[:600], req.lang)))
         except Exception:
             english = ""
-    hits = kb().search(search_query(q, english), k=4)
+    probe = kb().search(search_query(q, english), k=8)  # the list may rank just below the top 4 (e.g. after the pivot)
+    raw_hits = probe[:4]
+    verbatim = official_list(req.question, english, probe, req.lang) if req.mode == "ask" else None
+    if verbatim:
+        listed = [d for d in kb().docs if d["id"].startswith(LIST_PREFIX)]
+        hits = listed + [h for h in raw_hits if not h["id"].startswith(LIST_PREFIX)][: 4 - len(listed)]
+    else:
+        hits = complete_lists(kb(), raw_hits)
     user = f"SOURCES:\n{format_context(hits)}\n\nQUESTION:\n{q}"
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
     sources = [{"id": h["id"], "title": h["title"], "section": h.get("section", ""), "url": h["url"]} for h in hits]
@@ -228,9 +282,13 @@ async def ask(req: Ask):
         full = ""
         t = time.time()
         try:
-            async for piece in gen().stream(messages):
-                full += piece
-                yield f"data: {json.dumps({'type': 'token', 'text': piece})}\n\n"
+            if verbatim:  # an official list: shown as published, not generated
+                full = verbatim
+                yield f"data: {json.dumps({'type': 'token', 'text': verbatim})}\n\n"
+            else:
+                async for piece in gen().stream(messages):
+                    full += piece
+                    yield f"data: {json.dumps({'type': 'token', 'text': piece})}\n\n"
         except Exception as e:  # keep the UI alive and honest
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)[:200]})}\n\n"
         cited = sorted(set(re.findall(r"\[([a-z0-9-]+)\]", full)) & {s["id"] for s in sources})

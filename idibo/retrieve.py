@@ -111,3 +111,19 @@ class HybridKB(KB):
             score[i] += self.bonus[i] * 0.005
         top = sorted(score, key=lambda i: -score[i])[:k]
         return [dict(self.docs[i], score=round(score[i], 4)) for i in top]
+
+
+# ---------------------------------------------------------------- multi-chunk lists (app only)
+# A list split over several chunks (the 2027 presidential candidates) must be shown whole: returning half of it
+# would show some parties and not others, which reads as bias. If one part is retrieved, all parts are included.
+LIST_GROUPS = ("inec-presidential-candidates-2027-",)
+
+
+def complete_lists(kb: KB, hits: list[dict], k: int = 4) -> list[dict]:
+    for prefix in LIST_GROUPS:
+        if not any(h["id"].startswith(prefix) for h in hits):
+            continue
+        parts = [d for d in kb.docs if d["id"].startswith(prefix)]
+        others = [h for h in hits if not h["id"].startswith(prefix)]
+        hits = parts + others[: max(0, k - len(parts))]
+    return hits
