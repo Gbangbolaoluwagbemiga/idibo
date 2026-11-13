@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import AsyncIterator
@@ -124,29 +125,45 @@ class LlamaCpp(Generator):
                          n_gpu_layers=int(os.environ.get("IDIBO_GPU_LAYERS", "-1")), verbose=False)  # Metal on a Mac; CPU on a server
         self.llm.set_cache(LlamaRAMCache(capacity_bytes=1 << 30))  # reuse the shared system-prompt prefix
         self.lock = asyncio.Lock()
+        self.tlock = threading.Lock()
 
     async def complete(self, messages, max_tokens=60):
+        def run():
+            with self.tlock:
+                return self.llm.create_chat_completion(messages=messages, max_tokens=max_tokens, temperature=0)
+
         async with self.lock:
-            r = await asyncio.to_thread(self.llm.create_chat_completion, messages=messages, max_tokens=max_tokens,
-                                        temperature=0)
+            r = await asyncio.to_thread(run)
         return r["choices"][0]["message"]["content"]
 
     async def stream(self, messages):
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue()
 
+        stop = threading.Event()
+
         def run():
-            for part in self.llm.create_chat_completion(messages=messages, max_tokens=420, temperature=0.1, repeat_penalty=1.12,
-                                                    stream=True):  # repeat_penalty: the 4-bit model looped on some Pidgin answers
-                delta = part["choices"][0]["delta"].get("content")
-                if delta:
-                    loop.call_soon_threadsafe(q.put_nowait, delta)
-            loop.call_soon_threadsafe(q.put_nowait, None)
+            # The thread holds tlock for its whole life: if the client disconnects, the async lock is released but this
+            # thread may still be generating; two generations on one llama.cpp context corrupt its state (garbled text).
+            with self.tlock:
+                try:
+                    for part in self.llm.create_chat_completion(messages=messages, max_tokens=420, temperature=0.1,
+                                                                repeat_penalty=1.12, stream=True):  # 4-bit looped on Pidgin
+                        if stop.is_set():
+                            break
+                        delta = part["choices"][0]["delta"].get("content")
+                        if delta:
+                            loop.call_soon_threadsafe(q.put_nowait, delta)
+                finally:
+                    loop.call_soon_threadsafe(q.put_nowait, None)
 
         async with self.lock:  # one llama.cpp context: never run two generations at once
             loop.run_in_executor(None, run)
-            while (tok := await q.get()) is not None:
-                yield tok
+            try:
+                while (tok := await q.get()) is not None:
+                    yield tok
+            finally:
+                stop.set()  # client gone: stop generating now
 
 
 class HFLocal(Generator):
