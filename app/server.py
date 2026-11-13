@@ -252,6 +252,21 @@ def official_list(question: str, english: str, raw_hits: list[dict], lang: str) 
     return f"{head}\n\n{body}\n\n{cites}"
 
 
+PIDGIN = re.compile(r"\b(dey|wetin|una|wey|abeg|no get|make you|e go|dem|don|fit)\b", re.I)
+
+
+# The fine-tune mirrors the question's style, so a Pidgin-flavoured question gets its Pidgin "I don't know" even when
+# English is selected; it also won't translate Pidgin to English (it copies it). Its standard abstention is swapped for
+# the English one; other Pidgin answers are left as they are (a known limitation).
+ABSTAIN_EN = ("I don't have that information. Official election data, including future results, detailed vote counts, "
+              "and personal PVC status, are only available from INEC. Please visit inecnigeria.org, use the polling "
+              "unit locator, or check the IReV portal for the latest information.")
+
+
+def looks_pidgin(text: str) -> bool:
+    return len(PIDGIN.findall(text)) >= 2
+
+
 @app.post("/api/ask")
 async def ask(req: Ask):
     q = req.question.strip()[:1200]
@@ -273,7 +288,7 @@ async def ask(req: Ask):
         hits = listed + [h for h in raw_hits if not h["id"].startswith(LIST_PREFIX)][: 4 - len(listed)]
     else:
         hits = complete_lists(kb(), raw_hits)
-    user = f"SOURCES:\n{format_context(hits)}\n\nQUESTION:\n{q}"
+    user = f"SOURCES:\n{format_context(hits)}\n\nQUESTION:\n{q}"  # the prompt format evaluated in the benchmarks
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
     sources = [{"id": h["id"], "title": h["title"], "section": h.get("section", ""), "url": h["url"]} for h in hits]
 
@@ -291,6 +306,9 @@ async def ask(req: Ask):
                     yield f"data: {json.dumps({'type': 'token', 'text': piece})}\n\n"
         except Exception as e:  # keep the UI alive and honest
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)[:200]})}\n\n"
+        if req.lang == "en" and not verbatim and full.strip().lower().startswith("i no get that information"):
+            full = ABSTAIN_EN
+            yield f"data: {json.dumps({'type': 'replace', 'text': full})}\n\n"
         cited = sorted(set(re.findall(r"\[([a-z0-9-]+)\]", full)) & {s["id"] for s in sources})
         yield f"data: {json.dumps({'type': 'done', 'cited': cited, 'seconds': round(time.time() - t, 1)})}\n\n"
 
@@ -395,9 +413,9 @@ async def stt(file: UploadFile = File(...), lang: str = Form("en")):
                 r = await c.post(f"{YARN}/asr", headers=hdr, files={"file": (file.filename or "q.webm", data, file.content_type or "audio/webm")})
                 j = r.json() if r.status_code < 400 else None
                 if j and _find_text(j) is None and j.get("job_id"):
-                    for _ in range(30):
-                        await asyncio.sleep(1.0)
-                        j = (await c.get(f"{YARN}/status/{j['job_id']}", headers=hdr)).json()
+                    for _ in range(60):  # ASR jobs report at /asr/{id} (not /status/{id}, which is TTS-only)
+                        await asyncio.sleep(0.5)
+                        j = (await c.get(f"{YARN}/asr/{j['job_id']}", headers=hdr)).json()
                         if j.get("status") in ("completed", "failed"):
                             break
                 if j and (t := _find_text(j)):

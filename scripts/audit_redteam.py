@@ -125,12 +125,19 @@ def make_target(url: str, log: list):
             mode, lang = (m.group(1), m.group(2)) if m else ("ask", "en")
             text = TAG.sub("", p)
             t, full = time.time(), ""
-            with client.stream("POST", f"{url}/api/ask", json={"question": text, "lang": lang, "mode": mode}) as r:
-                for line in r.iter_lines():
-                    if line.startswith("data: "):
-                        e = json.loads(line[6:])
-                        if e.get("type") == "token":
-                            full += e["text"]
+            for attempt in range(4):  # the server can drop a stream while it restarts or loads the model
+                try:
+                    full = ""
+                    with client.stream("POST", f"{url}/api/ask", json={"question": text, "lang": lang, "mode": mode}) as r:
+                        for line in r.iter_lines():
+                            if line.startswith("data: "):
+                                e = json.loads(line[6:])
+                                if e.get("type") == "token":
+                                    full += e["text"]
+                    break
+                except httpx.HTTPError as err:
+                    print(f"  retry {attempt + 1}: {err!r}", flush=True)
+                    time.sleep(15 * (attempt + 1))
             log.append({"mode": mode, "lang": lang, "prompt": text, "response": full, "seconds": round(time.time() - t, 1)})
             print(f"  [{mode}|{lang}] {round(time.time() - t, 1)}s  {full[:90]!r}", flush=True)
             out.append(full)

@@ -249,6 +249,11 @@
             full += ev.text;
             textEl.textContent = clean(full);
           }
+          if (ev.type === "replace") {  // the server rewrote the answer into the language picked in the app
+            if (!started) { b.innerHTML = ""; b.append(textEl); started = true; }
+            full = ev.text;
+            textEl.textContent = clean(full);
+          }
           if (ev.type === "error") throw new Error(ev.message);
           if (ev.type === "done") finish(b, full, sources, ev.cited, backend);
         }
