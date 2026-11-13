@@ -135,7 +135,8 @@ class LlamaCpp(Generator):
         q: asyncio.Queue = asyncio.Queue()
 
         def run():
-            for part in self.llm.create_chat_completion(messages=messages, max_tokens=420, temperature=0.1, stream=True):
+            for part in self.llm.create_chat_completion(messages=messages, max_tokens=420, temperature=0.1, repeat_penalty=1.12,
+                                                    stream=True):  # repeat_penalty: the 4-bit model looped on some Pidgin answers
                 delta = part["choices"][0]["delta"].get("content")
                 if delta:
                     loop.call_soon_threadsafe(q.put_nowait, delta)

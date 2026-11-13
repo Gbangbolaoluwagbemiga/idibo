@@ -10,12 +10,11 @@
   "enable_internet": true,
   "dataset_sources": [
     "crypticdev/idibo-data",
-    "crypticdev/idibo-runs"
+    "crypticdev/idibo-runs",
+    "crypticdev/idibo-round2-out"
   ],
   "kernel_sources": [
-    "crypticdev/idibo-round2",
-    "crypticdev/idibo-resta",
-    "crypticdev/idibo-base-eval"
+    "crypticdev/idibo-resta"
   ],
   "competition_sources": [],
   "model_sources": [],

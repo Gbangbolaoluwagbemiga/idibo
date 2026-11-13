@@ -36,12 +36,16 @@ else:
 # generations: round 1 (with command-a-plus grades) and round 2
 for t in glob.glob("/kaggle/input/**/runs.tar.gz", recursive=True)[:1]:
     tarfile.open(t).extractall(W)
-# Merge every runs/ and runs2/ folder found in the inputs (round 1 dataset + round 2 output).
-for d in sorted(glob.glob("/kaggle/input/*/runs") + glob.glob("/kaggle/input/*/*/runs")
-                + glob.glob("/kaggle/input/*/runs2") + glob.glob("/kaggle/input/*/*/runs2")):
-    if os.path.isdir(d) and "/idibo/" not in d:
-        log(f"merge {d}")
-        shutil.copytree(d, f"{W}/{os.path.basename(d)}", dirs_exist_ok=True)
+# Merge every runs/ and runs2/ folder found anywhere in the inputs (round-1 dataset, round-2 and ReSta outputs).
+# v1 assumed /kaggle/input/<name>/runs and found nothing: the mount layout differs, so walk the whole tree.
+print(subprocess.run("find /kaggle/input -maxdepth 4 -type d | head -60", shell=True, capture_output=True, text=True).stdout, flush=True)
+for root, dirs, _ in os.walk("/kaggle/input"):
+    for d in list(dirs):
+        if d in ("runs", "runs2") and "idibo" not in root.split("/"):  # skip the code copy at .../idibo/
+            src = os.path.join(root, d)
+            log(f"merge {src} -> {d}")
+            shutil.copytree(src, f"{W}/{d}", dirs_exist_ok=True)
+            dirs.remove(d)
 for d in ("runs", "runs2"):
     if os.path.isdir(f"{W}/{d}"):
         shutil.rmtree(f"{W}/{d}/smoke-batch", ignore_errors=True)
@@ -76,9 +80,21 @@ assert BT and JUDGE, "could not download the models: accept their terms on Huggi
 log(f"back-translation: {BT}; judge: {JUDGE}")
 
 RUNS = " ".join(d for d in ("runs", "runs2") if os.path.isdir(f"{W}/{d}"))
-sh(f"{VPY} scripts/judge_local.py --stage translate --runs {RUNS} --model {BT} --tp 2")
+assert RUNS, "no generations found in the inputs (see the tree printed above)"
+for d in RUNS.split():
+    log(f"{d}: " + ", ".join(f"{c}/{f}" for c in sorted(os.listdir(f"{W}/{d}")) if os.path.isdir(f"{W}/{d}/{c}")
+                              for f in sorted(os.listdir(f"{W}/{d}/{c}")) if f.endswith(".jsonl") and "." not in f[:-6]))
+
+
+def stage(args):  # two GPUs (tensor parallel); one GPU if that fails
+    if sh(f"{VPY} scripts/judge_local.py {args} --tp 2", check=False).returncode != 0:
+        log("tensor-parallel run failed; retrying on one GPU")
+        sh(f"{VPY} scripts/judge_local.py {args} --tp 1")
+
+
+stage(f"--stage translate --runs {RUNS} --model {BT}")
 log("back-translation done")
-sh(f"{VPY} scripts/judge_local.py --stage judge --runs {RUNS} --model {JUDGE} --tp 2 --name {os.path.basename(JUDGE)}")
+stage(f"--stage judge --runs {RUNS} --model {JUDGE} --name {os.path.basename(JUDGE)}")
 log("judging done")
 
 r1 = " ".join(sorted(glob.glob(f"{W}/runs/*/")))

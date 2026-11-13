@@ -1,0 +1,19 @@
+# App and scripts (CPU). GPU jobs pin their own versions in kaggle/*/run.py.
+torch
+transformers>=5.15,<6
+peft<1
+sentence-transformers
+llama-cpp-python>=0.3.36
+fastapi
+uvicorn[standard]
+httpx
+pydantic
+python-multipart
+numpy
+faster-whisper
+huggingface_hub
+datasets
+# Lexsi libraries
+curatorkit @ git+https://github.com/Lexsi-Labs/CuratorKIT.git
+aligntune
+safetune @ git+https://github.com/Lexsi-Labs/SafeTune.git
