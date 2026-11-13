@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import AsyncIterator
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -442,13 +442,17 @@ async def stt(file: UploadFile = File(...), lang: str = Form("en")):
     data = await file.read()
     if not data or len(data) > 8_000_000:
         raise HTTPException(400, "empty or too long")
+    return await transcribe(data, file.filename or "q.webm", file.content_type or "audio/webm", lang)
+
+
+async def transcribe(data: bytes, filename: str, content_type: str, lang: str) -> dict:
     h = hashlib.sha256(data).hexdigest()[:24]
     key = env_key("YARNGPT_API_KEY")
     if key:  # YarnGPT ASR first (Nigerian languages); any failure (e.g. no credits) falls back to Whisper
         try:
             hdr = {"Authorization": f"Bearer {key}", "Idempotency-Key": f"idibo-asr-{h}"}
             async with httpx.AsyncClient(timeout=60) as c:
-                r = await c.post(f"{YARN}/asr", headers=hdr, files={"file": (file.filename or "q.webm", data, file.content_type or "audio/webm")})
+                r = await c.post(f"{YARN}/asr", headers=hdr, files={"file": (filename, data, content_type)})
                 j = r.json() if r.status_code < 400 else None
                 if j and _find_text(j) is None and j.get("job_id"):
                     for _ in range(60):  # ASR jobs report at /asr/{id} (not /status/{id}, which is TTS-only)
@@ -462,7 +466,7 @@ async def stt(file: UploadFile = File(...), lang: str = Form("en")):
             pass
     if lang not in WHISPER_LANG:
         raise HTTPException(503, "speech recognition for this language needs the YarnGPT service")
-    suffix = Path(file.filename or "q.webm").suffix or ".webm"
+    suffix = Path(filename).suffix or ".webm"
     tmp = CACHE / f"stt-{h}{suffix}"
     tmp.write_bytes(data)
     try:
@@ -472,6 +476,160 @@ async def stt(file: UploadFile = File(...), lang: str = Form("en")):
     finally:
         tmp.unlink(missing_ok=True)
     return {"text": text, "engine": "whisper"}
+
+
+# ------------------------------------------------------------------ WhatsApp (Twilio)
+# Election rumours in Nigeria travel on WhatsApp, so Ìdìbò answers there too: send a question (text or voice note) or
+# forward a message to check it. The reply goes through the same pipeline as the web app (sources, injection guard,
+# contact check), with numbered sources and, when the user sent a voice note, a spoken answer.
+# Twilio waits at most 15 s for a webhook, and an answer takes longer, so the webhook returns at once and the reply is
+# sent with Twilio's REST API.
+PUBLIC_URL = os.environ.get("IDIBO_PUBLIC_URL", "https://idibo-2027.up.railway.app")
+WA_LANG: dict[str, str] = {}  # sender -> chosen language (memory only; nothing about users is stored on disk)
+LANG_WORDS = {"en": ("english", "en"), "pcm": ("pidgin", "naija", "pcm"), "yo": ("yoruba", "yorùbá", "yo"),
+              "ha": ("hausa", "ha"), "ig": ("igbo", "ig")}
+WA_HELP = ("Ìdìbò: voter information for Nigeria's 2027 election, from INEC and the Electoral Act 2026.\n\n"
+           "• Ask a question, by text or voice note.\n• Forward a message you doubt, and I'll check it.\n"
+           "• Change language: send english, pidgin, yoruba, hausa or igbo.\n\n"
+           "Not official INEC guidance. I never tell anyone who to vote for.")
+
+
+def detect_lang(text: str) -> str:
+    t = text.lower()
+    if re.search(r"[ƙɗɓ]", t) or re.search(r"\b(ina|yaya|zaɓe|zabe|shugaban|kuri'?a|ƙuri)\b", t):
+        return "ha"
+    if re.search(r"\b(nke|bụ|ntuli|ọ bụ|kedu|gị|m na)\b", t):
+        return "ig"
+    if re.search(r"[ẹọṣ]|[àèìòù]", t) or re.search(r"\b(ìdìbò|idibo ni|nígbà|níbo|báwo|kí ni)\b", t):
+        return "yo"
+    if looks_pidgin(t):
+        return "pcm"
+    return "en"
+
+
+def twilio_ok(sig: str, params: dict) -> bool:
+    import base64
+    import hmac
+
+    token = env_key("TWILIO_AUTH_TOKEN")
+    if not token:
+        return False
+    data = PUBLIC_URL + "/api/whatsapp" + "".join(k + params[k] for k in sorted(params))
+    want = base64.b64encode(hmac.new(token.encode(), data.encode(), hashlib.sha1).digest()).decode()
+    return hmac.compare_digest(want, sig or "")
+
+
+async def wa_send(to: str, frm: str, body: str = "", media: str | None = None) -> None:
+    sid, token = env_key("TWILIO_ACCOUNT_SID"), env_key("TWILIO_AUTH_TOKEN")
+    data = {"To": to, "From": frm, "Body": body[:1550]}
+    if media:
+        data["MediaUrl"] = media
+    async with httpx.AsyncClient(timeout=30, auth=(sid, token)) as c:
+        r = await c.post(f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json", data=data)
+        if r.status_code >= 400:
+            print("twilio send failed", r.status_code, r.text[:200], flush=True)
+
+
+async def answer_text(question: str, lang: str, mode: str) -> tuple[str, list[dict]]:
+    """Run the web app's /api/ask pipeline and collect the final answer and its sources."""
+    resp = await ask(Ask(question=question, lang=lang, mode=mode))
+    full, sources = "", []
+    async for chunk in resp.body_iterator:
+        for line in (chunk if isinstance(chunk, str) else chunk.decode()).splitlines():
+            if not line.startswith("data: "):
+                continue
+            e = json.loads(line[6:])
+            if e["type"] == "meta":
+                sources = e["sources"]
+            elif e["type"] == "token":
+                full += e["text"]
+            elif e["type"] == "replace":
+                full = e["text"]
+    return full.strip(), sources
+
+
+def wa_format(answer: str, sources: list[dict]) -> str:
+    ids = {s["id"]: s for s in sources}
+    order: list[str] = []
+
+    def num(m):
+        sid = m.group(1)
+        if sid not in ids:
+            return ""
+        if sid not in order:
+            order.append(sid)
+        return f"[{order.index(sid) + 1}]"
+
+    text = re.sub(r"\s*\[([a-z0-9-]+)\]", lambda m: " " + num(m) if num(m) else "", answer)
+    text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)  # WhatsApp bold
+    lines = [text]
+    if order:
+        lines.append("\n" + "\n".join(f"[{i + 1}] {ids[s]['title']}" + (f", {ids[s]['section']}" if ids[s].get('section') else "")
+                                       + f"\n{ids[s]['url']}" for i, s in enumerate(order)))
+    lines.append("\n_Ìdìbò · not official INEC guidance · inecnigeria.org_")
+    return "\n".join(lines)
+
+
+async def wa_handle(form: dict) -> None:
+    user, ours = form.get("From", ""), form.get("To", "")
+    text = (form.get("Body") or "").strip()
+    voice_in = int(form.get("NumMedia") or 0) > 0 and (form.get("MediaContentType0") or "").startswith("audio")
+    lang = WA_LANG.get(user)
+    try:
+        low = text.lower().strip(" .!")
+        for code, words in LANG_WORDS.items():
+            if low in words:
+                WA_LANG[user] = code
+                await wa_send(user, ours, f"OK: {LANGS[code]}. " + I18N_OK.get(code, ""))
+                return
+        if low in ("hi", "hello", "help", "start", "menu", "") and not voice_in:
+            await wa_send(user, ours, WA_HELP)
+            return
+        if voice_in:
+            sid, token = env_key("TWILIO_ACCOUNT_SID"), env_key("TWILIO_AUTH_TOKEN")
+            async with httpx.AsyncClient(timeout=60, auth=(sid, token), follow_redirects=True) as c:
+                audio = (await c.get(form["MediaUrl0"])).content
+            got = await transcribe(audio, "voice.ogg", form.get("MediaContentType0") or "audio/ogg", lang or "en")
+            text = got["text"]
+        lang = lang or detect_lang(text)
+        # A long or forwarded message is something to check; a short one is a question.
+        mode = "check" if len(text) > 160 or re.match(r"(?i)(fwd|forwarded|check|is this (true|real))\b", text) else "ask"
+        answer, sources = await answer_text(text, lang, mode)
+        await wa_send(user, ours, wa_format(answer, sources))
+        if voice_in and answer:
+            try:
+                await tts(TTS(text=answer, lang=lang))
+            except Exception as e:
+                print("whatsapp voice failed", repr(e)[:200], flush=True)
+                return
+            clean = re.sub(r"[*#_`]", "", re.sub(r"\[[a-z0-9-]+\]", "", answer)).strip()[:1500]
+            if len(clean) < 20:
+                clean = clean.ljust(19) + "......"
+            h = hashlib.sha256(f"{VOICE.get(lang, 'femi')}|{lang}|{clean}".encode()).hexdigest()[:24]
+            await wa_send(user, ours, "", f"{PUBLIC_URL}/api/voice/{h}.mp3")
+    except Exception as e:  # tell the user rather than going silent
+        print("whatsapp error", repr(e)[:300], flush=True)
+        await wa_send(user, ours, "Sorry, I couldn't answer that just now. Please try again in a minute.")
+
+
+I18N_OK = {"en": "Ask your question.", "pcm": "Ask your question.", "yo": "Béèrè ìbéèrè rẹ.",
+           "ha": "Yi tambayarka.", "ig": "Jụọ ajụjụ gị."}
+
+
+@app.post("/api/whatsapp")
+async def whatsapp(request: Request):
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    if not twilio_ok(request.headers.get("X-Twilio-Signature", ""), form):
+        raise HTTPException(403, "bad signature")
+    asyncio.create_task(wa_handle(form))
+    return Response("<Response></Response>", media_type="application/xml")
+
+
+@app.get("/api/voice/{name}")
+def voice_file(name: str):
+    if not re.fullmatch(r"[0-9a-f]{24}\.mp3", name) or not (CACHE / name).exists():
+        raise HTTPException(404, "not found")
+    return FileResponse(CACHE / name, media_type="audio/mpeg")
 
 
 @app.get("/api/judge")
