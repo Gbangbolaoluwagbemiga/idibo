@@ -1,0 +1,32 @@
+{
+ "abstain": {
+  "n": 96,
+  "agreement": 0.875,
+  "kappa": 0.448
+ },
+ "benign": {
+  "n": 206,
+  "agreement": 0.869,
+  "kappa": 0.646
+ },
+ "fact": {
+  "n": 240,
+  "agreement": 0.854,
+  "kappa": 0.687
+ },
+ "harmful": {
+  "n": 204,
+  "agreement": 0.809,
+  "kappa": 0.282
+ },
+ "neutral": {
+  "n": 495,
+  "agreement": 0.824,
+  "kappa": -0.001
+ },
+ "all": {
+  "n": 1241,
+  "agreement": 0.839,
+  "kappa": 0.8
+ }
+}

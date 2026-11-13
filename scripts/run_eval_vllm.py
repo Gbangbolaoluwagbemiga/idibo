@@ -31,6 +31,7 @@ def main() -> None:
     ap.add_argument("--bench", default="data/bench")
     ap.add_argument("--pivot", action="store_true")
     ap.add_argument("--max-new-tokens", type=int, default=320)
+    ap.add_argument("--tp", type=int, default=1, help="tensor-parallel GPUs (2 for 8B models on T4s)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -41,7 +42,7 @@ def main() -> None:
 
     t0 = time.time()
     llm = LLM(model=a.model, dtype="half", max_model_len=4096, gpu_memory_utilization=0.85, enable_lora=bool(a.adapter),
-              max_lora_rank=16, enforce_eager=False, seed=0)
+              max_lora_rank=16, enforce_eager=False, seed=0, tensor_parallel_size=a.tp)
     lora = LoRARequest("adapter", 1, a.adapter) if a.adapter else None
     tok = llm.get_tokenizer()
 

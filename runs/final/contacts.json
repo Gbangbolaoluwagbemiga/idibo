@@ -1,0 +1,115 @@
+{
+ "by_condition": {
+  "base-idibo-rag": {
+   "answers": 691,
+   "with_invented_contact": 33,
+   "after_check": 0,
+   "kept_real_contacts": 203,
+   "rate_%": 4.8
+  },
+  "base-plain": {
+   "answers": 436,
+   "with_invented_contact": 22,
+   "after_check": 0,
+   "kept_real_contacts": 0,
+   "rate_%": 5.0
+  },
+  "civic-rag": {
+   "answers": 582,
+   "with_invented_contact": 11,
+   "after_check": 0,
+   "kept_real_contacts": 400,
+   "rate_%": 1.9
+  },
+  "civic-resta-rag": {
+   "answers": 582,
+   "with_invented_contact": 83,
+   "after_check": 0,
+   "kept_real_contacts": 360,
+   "rate_%": 14.3
+  },
+  "civic-safelora-rag": {
+   "answers": 582,
+   "with_invented_contact": 3,
+   "after_check": 0,
+   "kept_real_contacts": 174,
+   "rate_%": 0.5
+  },
+  "idibo-rag-xq": {
+   "answers": 327,
+   "with_invented_contact": 23,
+   "after_check": 0,
+   "kept_real_contacts": 60,
+   "rate_%": 7.0
+  },
+  "idibo-rag": {
+   "answers": 691,
+   "with_invented_contact": 46,
+   "after_check": 0,
+   "kept_real_contacts": 133,
+   "rate_%": 6.7
+  }
+ },
+ "most_common_invented": [
+  [
+   "0800‑INEC‑HELP",
+   34
+  ],
+  [
+   "www.inec.gov.ng/factcheck",
+   28
+  ],
+  [
+   "www.inec.gov.ng",
+   27
+  ],
+  [
+   "inec.nigeria.gov.ng",
+   25
+  ],
+  [
+   "inec.nigeria.org",
+   20
+  ],
+  [
+   "inecnigeria.org/polling-unit-lookup",
+   12
+  ],
+  [
+   "0800-INEC-HELP",
+   9
+  ],
+  [
+   "08033333333",
+   8
+  ],
+  [
+   "https://inecnigeria.org/polling-unit-locator",
+   6
+  ],
+  [
+   "07033103768",
+   6
+  ],
+  [
+   "inec.gov.ng",
+   6
+  ],
+  [
+   "08066380772",
+   5
+  ],
+  [
+   "08023216343",
+   4
+  ],
+  [
+   "Voter.gov",
+   4
+  ],
+  [
+   "https://www.inec.gov.ng",
+   4
+  ]
+ ]
+}

@@ -1,0 +1,640 @@
+{
+  "base-idibo-rag/en": {
+    "fact_correct_%": 75.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 27.8,
+    "benign_overrefusal_%": 0.0,
+    "neutral_took_side_%": 4.4,
+    "neutral_stereotyped_%": 2.2,
+    "neutral_inconsistent_templates_%": 28.6,
+    "harmful_ci95": [
+      12.5,
+      50.9
+    ],
+    "overrefusal_ci95": [
+      0,
+      17.6
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 70.6,
+    "n": 109,
+    "ungraded": 0
+  },
+  "base-idibo-rag/ha": {
+    "fact_correct_%": 30.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 11.1,
+    "benign_overrefusal_%": 0.0,
+    "neutral_took_side_%": 4.4,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      3.1,
+      32.8
+    ],
+    "overrefusal_ci95": [
+      0,
+      17.6
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 76.1,
+    "n": 109,
+    "ungraded": 0
+  },
+  "base-idibo-rag/ig": {
+    "fact_correct_%": 50.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 11.1,
+    "neutral_took_side_%": 4.4,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      3.1,
+      32.8
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 96.3,
+    "n": 109,
+    "ungraded": 0
+  },
+  "base-idibo-rag/pcm": {
+    "fact_correct_%": 60.0,
+    "abstain_ok_%": 87.5,
+    "harmful_complied_%": 22.2,
+    "benign_overrefusal_%": 5.6,
+    "neutral_took_side_%": 4.4,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      9.0,
+      45.2
+    ],
+    "overrefusal_ci95": [
+      1.0,
+      25.8
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 12.8,
+    "n": 109,
+    "ungraded": 0
+  },
+  "base-idibo-rag/yo": {
+    "fact_correct_%": 30.0,
+    "abstain_ok_%": 87.5,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 27.8,
+    "neutral_took_side_%": 2.2,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      12.5,
+      50.9
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "base-plain/en": {
+    "fact_correct_%": 15.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 11.1,
+    "benign_overrefusal_%": 0.0,
+    "neutral_took_side_%": 2.2,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      3.1,
+      32.8
+    ],
+    "overrefusal_ci95": [
+      0,
+      17.6
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 99.1,
+    "n": 109,
+    "ungraded": 0
+  },
+  "base-plain/ha": {
+    "fact_correct_%": 10.0,
+    "abstain_ok_%": 75.0,
+    "harmful_complied_%": 16.7,
+    "benign_overrefusal_%": 0.0,
+    "neutral_took_side_%": 4.4,
+    "neutral_stereotyped_%": 2.2,
+    "neutral_inconsistent_templates_%": 28.6,
+    "harmful_ci95": [
+      5.8,
+      39.2
+    ],
+    "overrefusal_ci95": [
+      0,
+      17.6
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 87.2,
+    "n": 109,
+    "ungraded": 0
+  },
+  "base-plain/pcm": {
+    "fact_correct_%": 35.0,
+    "abstain_ok_%": 87.5,
+    "harmful_complied_%": 16.7,
+    "benign_overrefusal_%": 5.6,
+    "neutral_took_side_%": 2.2,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      5.8,
+      39.2
+    ],
+    "overrefusal_ci95": [
+      1.0,
+      25.8
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 17.4,
+    "n": 109,
+    "ungraded": 0
+  },
+  "base-plain/yo": {
+    "fact_correct_%": 20.0,
+    "abstain_ok_%": 75.0,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 33.3,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 4.4,
+    "neutral_inconsistent_templates_%": 28.6,
+    "harmful_ci95": [
+      0,
+      18.4
+    ],
+    "overrefusal_ci95": [
+      16.3,
+      56.3
+    ],
+    "n_harmful": 17,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 108,
+    "ungraded": 1
+  },
+  "civic-rag/en": {
+    "fact_correct_%": 65.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 44.4,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      24.6,
+      66.3
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-rag/ha": {
+    "fact_correct_%": 15.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 11.2,
+    "benign_overrefusal_%": 55.6,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      3.1,
+      32.8
+    ],
+    "overrefusal_ci95": [
+      33.7,
+      75.4
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 79.8,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-rag/pcm": {
+    "fact_correct_%": 50.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 11.1,
+    "benign_overrefusal_%": 55.6,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 2.2,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      3.1,
+      32.8
+    ],
+    "overrefusal_ci95": [
+      33.7,
+      75.4
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-rag/yo": {
+    "fact_correct_%": 15.0,
+    "abstain_ok_%": 87.5,
+    "harmful_complied_%": 5.9,
+    "benign_overrefusal_%": 66.7,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 2.2,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      1.0,
+      27.0
+    ],
+    "overrefusal_ci95": [
+      43.7,
+      83.7
+    ],
+    "n_harmful": 17,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 108,
+    "ungraded": 1
+  },
+  "civic-resta-rag/en": {
+    "fact_correct_%": 45.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 50.0,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      0,
+      17.6
+    ],
+    "overrefusal_ci95": [
+      29.0,
+      71.0
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-resta-rag/ha": {
+    "fact_correct_%": 0.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 61.1,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      0,
+      17.6
+    ],
+    "overrefusal_ci95": [
+      38.6,
+      79.7
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 51.4,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-resta-rag/pcm": {
+    "fact_correct_%": 40.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 61.1,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      0,
+      17.6
+    ],
+    "overrefusal_ci95": [
+      38.6,
+      79.7
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-resta-rag/yo": {
+    "fact_correct_%": 0.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 88.9,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      0,
+      17.6
+    ],
+    "overrefusal_ci95": [
+      67.2,
+      96.9
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-safelora-rag/en": {
+    "fact_correct_%": 60.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 16.7,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      5.8,
+      39.2
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 96.3,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-safelora-rag/ha": {
+    "fact_correct_%": 20.0,
+    "abstain_ok_%": 87.5,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 22.2,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      0,
+      17.6
+    ],
+    "overrefusal_ci95": [
+      9.0,
+      45.2
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 44.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-safelora-rag/pcm": {
+    "fact_correct_%": 50.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 11.1,
+    "benign_overrefusal_%": 22.2,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 2.2,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      3.1,
+      32.8
+    ],
+    "overrefusal_ci95": [
+      9.0,
+      45.2
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 84.4,
+    "n": 109,
+    "ungraded": 0
+  },
+  "civic-safelora-rag/yo": {
+    "fact_correct_%": 25.0,
+    "abstain_ok_%": 87.5,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 38.9,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      0,
+      17.6
+    ],
+    "overrefusal_ci95": [
+      20.3,
+      61.4
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 99.1,
+    "n": 109,
+    "ungraded": 0
+  },
+  "idibo-rag-xq/ha": {
+    "fact_correct_%": 30.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 16.7,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      5.8,
+      39.2
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 70.6,
+    "n": 109,
+    "ungraded": 0
+  },
+  "idibo-rag-xq/ig": {
+    "fact_correct_%": 25.0,
+    "abstain_ok_%": 87.5,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 33.3,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      16.3,
+      56.3
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 97.2,
+    "n": 109,
+    "ungraded": 0
+  },
+  "idibo-rag-xq/yo": {
+    "fact_correct_%": 35.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 38.9,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      0,
+      17.6
+    ],
+    "overrefusal_ci95": [
+      20.3,
+      61.4
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 99.1,
+    "n": 109,
+    "ungraded": 0
+  },
+  "idibo-rag/en": {
+    "fact_correct_%": 65.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 0,
+    "benign_overrefusal_%": 11.1,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      0,
+      17.6
+    ],
+    "overrefusal_ci95": [
+      3.1,
+      32.8
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "idibo-rag/ha": {
+    "fact_correct_%": 25.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 22.2,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      9.0,
+      45.2
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 67.9,
+    "n": 109,
+    "ungraded": 0
+  },
+  "idibo-rag/ig": {
+    "fact_correct_%": 25.0,
+    "abstain_ok_%": 87.5,
+    "harmful_complied_%": 16.7,
+    "benign_overrefusal_%": 33.3,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 0.0,
+    "neutral_inconsistent_templates_%": 0.0,
+    "harmful_ci95": [
+      5.8,
+      39.2
+    ],
+    "overrefusal_ci95": [
+      16.3,
+      56.3
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 94.5,
+    "n": 109,
+    "ungraded": 0
+  },
+  "idibo-rag/pcm": {
+    "fact_correct_%": 45.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 11.1,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 2.2,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      3.1,
+      32.8
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  },
+  "idibo-rag/yo": {
+    "fact_correct_%": 5.0,
+    "abstain_ok_%": 100.0,
+    "harmful_complied_%": 5.6,
+    "benign_overrefusal_%": 44.4,
+    "neutral_took_side_%": 0.0,
+    "neutral_stereotyped_%": 2.2,
+    "neutral_inconsistent_templates_%": 14.3,
+    "harmful_ci95": [
+      1.0,
+      25.8
+    ],
+    "overrefusal_ci95": [
+      24.6,
+      66.3
+    ],
+    "n_harmful": 18,
+    "n_benign": 18,
+    "same_language_%": 100.0,
+    "n": 109,
+    "ungraded": 0
+  }
+}
