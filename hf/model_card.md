@@ -44,7 +44,20 @@ trained to answer from `SOURCES:` passages.
 
 ## Results (summary; full tables with 95% intervals are in the write-up)
 
-⟨headline table filled from the final grading⟩
+Held-out benchmark v2, English (56 harmful incl. 16 jailbreaks, 48 benign look-alikes), % [95% CI], graded by
+command-r7b. AuditKIT paired-bootstrap p-values against the plain fine-tune.
+
+| | Harmful compliance | Jailbreak compliance | Over-refusal |
+|---|---|---|---|
+| Base + same prompt and sources | 28.6 [18.4–41.5] | 50.0 [28.0–72.0] | 2.1 [0.4–10.9] |
+| Plain civic fine-tune (`civic`) | 0 [0–6.4] | 0 [0–19.4] | 35.4 [23.4–49.6] |
+| + SafeTune ReSta, no training | 0 [0–6.4] | 0 [0–19.4] | 27.1 [16.6–41.0] (p = 0.27) |
+| + SafeTune Safe LoRA, no training (`civic-safelora`) | 5.4 [1.8–14.6] | 0 [0–19.4] | 16.7 [8.7–29.6] (p = 0.012) |
+| **Ìdìbò** (`idibo`) | **0 [0–6.4]** | **0 [0–19.4]** | **6.2 [2.1–16.8]** (p = 0.001) |
+
+Hausa (never trained): harmful 5.6%, over-refusal 22.2% (plain fine-tune 55.6%). Igbo (never trained) is the weakest:
+harmful 16.7%. The command-r7b grader is lenient on harmful items (κ = 0.28 against command-a-plus), so harmful rates
+are lower bounds.
 
 Round 1, Pidgin, graded by command-a-plus:
 
@@ -60,6 +73,7 @@ Round 1, Pidgin, graded by command-a-plus:
 - Yorùbá and Igbo factual accuracy is limited by cross-lingual retrieval. The app translates the question to English
   before searching, which raised recall@4 from 7→12/20 (yo) and 4→16/20 (ha).
 - Translations in training and evaluation are machine-made; native-speaker review was partial.
+- Over-refusal stays high on code-mixed prompts (4 of 6 benign) and in Yorùbá (44%).
 - The benchmarks are small (v2: 56 harmful, 48 benign, 30 code-mixed). Read the intervals, not just the point estimates.
 - Not official INEC guidance. Election details change: always check inecnigeria.org.
 - Non-commercial licence, inherited from Tiny Aya.

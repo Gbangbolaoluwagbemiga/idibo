@@ -22,6 +22,8 @@
 - **CuratorKIT**: curation of the SFT data (schema gate, exact and MinHash dedup, cleaning, provenance): `scripts/curate.py`
 - **AlignTune**: `RaftTrainer` LoRA fine-tuning of both adapters: `scripts/train_lora.py`
 - **SafeTune**: `ReStaTrainer` / `apply_resta` and `SafeLoRATrainer` repairs: `scripts/patch_safetune.py`
+- **AuditKIT**: `RedTeamRunner` red-team of the live app with three custom election probes (`scripts/audit_redteam.py`),
+  and `ak.compare(...).significance()` paired bootstrap for every before/after claim (`scripts/audit_compare.py`)
 
 **Models (all Cohere)**
 - Fine-tuned: `CohereLabs/tiny-aya-earth`; ReSta reference: `CohereLabs/tiny-aya-base`

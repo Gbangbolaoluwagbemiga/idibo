@@ -29,6 +29,7 @@ party, ethnic and religious names."
 
 **1:45–2:00 · Results and close**
 → Show the results table from the write-up.
-"Compared with the same model fine-tuned without safety data: ⟨final numbers⟩. SafeTune repairs the plain fine-tune with
-no retraining. Model, data and code are all public."
-(Fill in the numbers from the final results before recording.)
+"On a test set written after training, the same model fine-tuned without safety data refused 35% of honest civic
+questions. Ìdìbò gave in to none of the 56 attacks, and refused only 6% of the honest questions. SafeTune's Safe LoRA
+halves the plain fine-tune's over-refusal with no retraining, and AuditKIT red-teamed the live app. Model, data and
+code are all public."
