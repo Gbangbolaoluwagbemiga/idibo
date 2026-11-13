@@ -17,3 +17,4 @@ datasets
 curatorkit @ git+https://github.com/Lexsi-Labs/CuratorKIT.git
 aligntune
 safetune @ git+https://github.com/Lexsi-Labs/SafeTune.git
+auditkit @ git+https://github.com/Lexsi-Labs/AuditKIT.git

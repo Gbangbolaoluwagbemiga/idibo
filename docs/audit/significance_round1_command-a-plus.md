@@ -1,0 +1,25 @@
+| bench | lang | baseline → candidate | metric | n | baseline | candidate | Δ | p | significant |
+|---|---|---|---|---|---|---|---|---|---|
+| v1 | en | base-idibo-rag → idibo-rag | safe | 18 | 0.61 | 1.00 | +0.39 | 0.001 | yes |
+| v1 | en | base-idibo-rag → idibo-rag | helpful | 18 | 1.00 | 0.89 | -0.11 | 0.229 | no |
+| v1 | en | base-idibo-rag → idibo-rag | neutral | 45 | 0.84 | 1.00 | +0.16 | 0.011 | yes |
+| v1 | en | base-idibo-rag → idibo-rag | correct | 20 | 0.55 | 0.55 | +0.00 | 1.000 | no |
+| v1 | pcm | base-idibo-rag → idibo-rag | safe | 18 | 0.44 | 1.00 | +0.56 | 0.001 | yes |
+| v1 | pcm | base-idibo-rag → idibo-rag | helpful | 18 | 0.89 | 0.83 | -0.06 | 0.830 | no |
+| v1 | pcm | base-idibo-rag → idibo-rag | neutral | 45 | 0.76 | 1.00 | +0.24 | 0.002 | yes |
+| v1 | pcm | base-idibo-rag → idibo-rag | correct | 20 | 0.50 | 0.50 | +0.00 | 1.000 | no |
+| v1 | yo | base-idibo-rag → idibo-rag | safe | 8 | 0.62 | 0.88 | +0.25 | 0.402 | no |
+| v1 | yo | base-idibo-rag → idibo-rag | helpful | 8 | 0.75 | 0.50 | -0.25 | 0.437 | no |
+| v1 | yo | base-idibo-rag → idibo-rag | correct | 20 | 0.15 | 0.15 | +0.00 | 1.000 | no |
+| v1 | en | civic-rag → idibo-rag | safe | 18 | 0.94 | 1.00 | +0.06 | 0.610 | no |
+| v1 | en | civic-rag → idibo-rag | helpful | 18 | 0.56 | 0.89 | +0.33 | 0.006 | yes |
+| v1 | en | civic-rag → idibo-rag | neutral | 45 | 0.98 | 1.00 | +0.02 | 0.609 | no |
+| v1 | en | civic-rag → idibo-rag | correct | 20 | 0.60 | 0.55 | -0.05 | 0.799 | no |
+| v1 | pcm | civic-rag → idibo-rag | safe | 18 | 0.94 | 1.00 | +0.06 | 0.624 | no |
+| v1 | pcm | civic-rag → idibo-rag | helpful | 18 | 0.39 | 0.83 | +0.44 | 0.001 | yes |
+| v1 | pcm | civic-rag → idibo-rag | neutral | 45 | 0.93 | 1.00 | +0.07 | 0.127 | no |
+| v1 | pcm | civic-rag → idibo-rag | correct | 20 | 0.40 | 0.50 | +0.10 | 0.558 | no |
+| v1 | yo | civic-rag → idibo-rag | safe | 18 | 0.94 | 0.94 | +0.00 | 1.000 | no |
+| v1 | yo | civic-rag → idibo-rag | helpful | 18 | 0.39 | 0.67 | +0.28 | 0.102 | no |
+| v1 | yo | civic-rag → idibo-rag | neutral | 45 | 1.00 | 0.93 | -0.07 | 0.129 | no |
+| v1 | yo | civic-rag → idibo-rag | correct | 20 | 0.15 | 0.15 | +0.00 | 1.000 | no |
