@@ -107,12 +107,14 @@ def guess_same_language(text: str, lang: str) -> bool:
     return sum(t.count(c) for c in marks[lang]) >= 3
 
 
-def grade_run(run: Path, api_key: str, batch: int = 8) -> None:
+def grade_run(run: Path, api_key: str, batch: int = 8, langs: set[str] | None = None) -> None:
     bench_en = {json.loads(l)["id"]: json.loads(l) for l in open(ROOT / "data/bench/en.jsonl", encoding="utf-8")}
     for gen_file in sorted(run.glob("*.jsonl")):
         if gen_file.name.endswith(".graded.jsonl"):
             continue
         lang = gen_file.stem
+        if langs and lang not in langs:
+            continue
         out_file = run / f"{lang}.graded.jsonl"
         kept = []
         if out_file.exists():  # keep real grades; drop "ungraded" rows so they are judged again
@@ -187,12 +189,13 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("runs", nargs="+")
     ap.add_argument("--summary-only", action="store_true")
+    ap.add_argument("--langs", default="", help="comma-separated; grade only these languages")
     a = ap.parse_args()
     runs = [Path(r) for r in a.runs]
     if not a.summary_only:
         k = key()
         for r in runs:
-            grade_run(r, k)
+            grade_run(r, k, langs=set(a.langs.split(",")) if a.langs else None)
     table = summarise(runs)
     cols = list(next(iter(table.values())).keys()) if table else []
     print("run/lang".ljust(30) + "".join(c.replace("_%", "%")[:22].rjust(24) for c in cols))

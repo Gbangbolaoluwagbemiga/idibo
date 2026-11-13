@@ -10,7 +10,8 @@ Backends (IDIBO_BACKEND)
             Every answer is labelled "dev backend" in the UI so it can never be mistaken for the fine-tune.
 
 Voice
-  /api/tts  YarnGPT (Nigerian voices; en/pcm/yo/ha/ig). Key from YARNGPT_API_KEY (a Space secret). Cached on disk.
+  /api/tts  YarnGPT, voice "umar" in all five languages. Key from YARNGPT_API_KEY (a Space secret). Cached on disk.
+  /api/stt  recorded question -> text: YarnGPT ASR, falling back to local faster-whisper (no Igbo in Whisper).
 """
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -41,8 +42,8 @@ STATIC = Path(__file__).parent / "static"
 CACHE = Path(os.environ.get("IDIBO_CACHE", "/tmp/idibo-cache"))
 CACHE.mkdir(parents=True, exist_ok=True)
 LANGS = {"en": "English", "pcm": "Naijá", "yo": "Yorùbá", "ha": "Hausa", "ig": "Igbo"}
-VOICE = {"en": "femi", "pcm": "femi", "yo": "idera", "ha": "zainab", "ig": "chinenye"}
-YARN_LANG = {"en": "english", "pcm": "pidgin", "yo": "yoruba", "ha": "hausa", "ig": "igbo"}
+VOICE = {"en": "umar", "pcm": "umar", "yo": "umar", "ha": "umar", "ig": "umar"}  # one voice, all five languages
+YARN = "https://api.yarngpt.ai/api/v1"
 
 app = FastAPI(title="Ìdìbò")
 _kb: HybridKB | None = None
@@ -229,14 +230,13 @@ async def tts(req: TTS):
     if not path.exists():
         hdr = {"Authorization": f"Bearer {key}", "Idempotency-Key": f"idibo-{h}"}
         async with httpx.AsyncClient(timeout=60) as c:
-            r = await c.post("https://api.yarngpt.ai/api/v1/tts", headers=hdr,
-                             json={"text": text, "voice": voice, "language": YARN_LANG.get(req.lang, "english"),
-                                   "output_format": "mp3"})
+            r = await c.post(f"{YARN}/tts", headers=hdr,
+                             json={"text": text, "voice": voice, "output_format": "mp3"})  # YarnGPT infers the language
             if r.status_code >= 400:
                 raise HTTPException(502, "voice service error")
             job = r.json()
             for _ in range(60):
-                s = (await c.get(f"https://api.yarngpt.ai/api/v1/status/{job['job_id']}", headers=hdr)).json()
+                s = (await c.get(f"{YARN}/status/{job['job_id']}", headers=hdr)).json()
                 if s.get("status") in ("completed", "failed"):
                     break
                 await asyncio.sleep(1.0)
@@ -245,6 +245,82 @@ async def tts(req: TTS):
             audio = await c.get(s["audio_url"])
             path.write_bytes(audio.content)
     return FileResponse(path, media_type="audio/mpeg")
+
+
+# ------------------------------------------------------------------ voice in
+# Local fallback only where it works: Whisper turned a Yorùbá test clip into Telugu-script gibberish, and it has no
+# Igbo. For yo/ha/ig, voice input needs YarnGPT's Nigerian ASR; otherwise we say so instead of guessing.
+WHISPER_LANG = {"en": "en", "pcm": "en"}
+_whisper = None
+
+
+def whisper_text(path: str, lang: str) -> str:
+    """Local fallback: faster-whisper (multilingual 'small', int8 on CPU)."""
+    global _whisper
+    if _whisper is None:
+        from faster_whisper import WhisperModel
+
+        # local_files_only: never download inside a request (fetch the model ahead, e.g. in the Dockerfile)
+        _whisper = WhisperModel(os.environ.get("IDIBO_WHISPER", "small"), device="cpu", compute_type="int8",
+                                local_files_only=True)
+    # Decode with ffmpeg (16 kHz mono float32): avoids PyAV, whose current releases break faster-whisper's loader.
+    import subprocess
+
+    import numpy as np
+
+    pcm = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-i", path, "-f", "f32le", "-ac", "1", "-ar", "16000", "-"],
+                         capture_output=True, check=True).stdout
+    audio = np.frombuffer(pcm, dtype=np.float32)
+    segs, _ = _whisper.transcribe(audio, language=WHISPER_LANG[lang], beam_size=1, vad_filter=True)
+    return " ".join(s.text.strip() for s in segs).strip()
+
+
+def _find_text(j) -> str | None:
+    if isinstance(j, dict):
+        for k in ("text", "transcript", "transcription"):
+            if isinstance(j.get(k), str):
+                return j[k]
+        for v in j.values():
+            if (t := _find_text(v)) is not None:
+                return t
+    return None
+
+
+@app.post("/api/stt")
+async def stt(file: UploadFile = File(...), lang: str = Form("en")):
+    data = await file.read()
+    if not data or len(data) > 8_000_000:
+        raise HTTPException(400, "empty or too long")
+    h = hashlib.sha256(data).hexdigest()[:24]
+    key = env_key("YARNGPT_API_KEY")
+    if key:  # YarnGPT ASR first (Nigerian languages); any failure (e.g. no credits) falls back to Whisper
+        try:
+            hdr = {"Authorization": f"Bearer {key}", "Idempotency-Key": f"idibo-asr-{h}"}
+            async with httpx.AsyncClient(timeout=60) as c:
+                r = await c.post(f"{YARN}/asr", headers=hdr, files={"file": (file.filename or "q.webm", data, file.content_type or "audio/webm")})
+                j = r.json() if r.status_code < 400 else None
+                if j and _find_text(j) is None and j.get("job_id"):
+                    for _ in range(30):
+                        await asyncio.sleep(1.0)
+                        j = (await c.get(f"{YARN}/status/{j['job_id']}", headers=hdr)).json()
+                        if j.get("status") in ("completed", "failed"):
+                            break
+                if j and (t := _find_text(j)):
+                    return {"text": t.strip(), "engine": "yarngpt"}
+        except Exception:
+            pass
+    if lang not in WHISPER_LANG:
+        raise HTTPException(503, "speech recognition for this language needs the YarnGPT service")
+    suffix = Path(file.filename or "q.webm").suffix or ".webm"
+    tmp = CACHE / f"stt-{h}{suffix}"
+    tmp.write_bytes(data)
+    try:
+        text = await asyncio.get_running_loop().run_in_executor(None, whisper_text, str(tmp), lang)
+    except Exception:
+        raise HTTPException(503, "speech recognition is not available right now")
+    finally:
+        tmp.unlink(missing_ok=True)
+    return {"text": text, "engine": "whisper"}
 
 
 @app.get("/api/judge")

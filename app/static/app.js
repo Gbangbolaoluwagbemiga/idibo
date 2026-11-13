@@ -106,26 +106,63 @@
     }
   }
 
-  // ---------------------------------------------------------------- voice in (browser speech recognition where available)
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null;
-  function listen(btn) {
-    if (!SR) { $("#micStatus").textContent = t("noMic"); $("#typeInput").focus(); return; }
-    if (rec) { rec.stop(); return; }
-    rec = new SR();
-    rec.lang = LANGS.find((l) => l.code === lang)?.speech ?? "en-NG";
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
-    let finalText = "";
+  // ---------------------------------------------------------------- voice in
+  // Record in the browser (works in every modern browser, including Arc and Safari), transcribe on the server
+  // (/api/stt: YarnGPT ASR for Nigerian languages, local Whisper as fallback). Stops by itself after a pause.
+  let mediaRec = null;
+  const status = (k) => { $("#micStatus").textContent = k ? t(k) : ""; };
+  async function listen(btn) {
+    if (mediaRec) { mediaRec.stop(); return; }
+    stopAudio();
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { status("noMic"); $("#typeInput").focus(); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { status("micBlocked"); return; }
+    const chunks = [];
+    const rec = (mediaRec = new MediaRecorder(stream));
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     btn.classList.add("on");
-    $("#micStatus").textContent = t("listening");
-    rec.onresult = (e) => {
-      finalText = Array.from(e.results).map((r) => r[0].transcript).join(" ");
-      $("#micStatus").textContent = finalText;
+    status("listening");
+
+    // Silence detection: once the person has spoken, stop after ~1.4 s of quiet. Hard limit 20 s.
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const an = ac.createAnalyser(); an.fftSize = 1024;
+    ac.createMediaStreamSource(stream).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    let spoke = false, quietSince = performance.now();
+    const started = performance.now();
+    const tick = () => {
+      if (rec.state !== "recording") return;
+      an.getByteTimeDomainData(buf);
+      let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
+      const now = performance.now();
+      if (peak > 14) { spoke = true; quietSince = now; }
+      if ((spoke && now - quietSince > 1400) || now - started > 20000 || (!spoke && now - started > 8000)) rec.stop();
+      else requestAnimationFrame(tick);
     };
-    rec.onerror = () => { $("#micStatus").textContent = t("noMic"); };
-    rec.onend = () => { btn.classList.remove("on"); rec = null; if (finalText.trim()) ask(finalText.trim()); };
-    rec.start();
+    requestAnimationFrame(tick);
+
+    rec.onstop = async () => {
+      mediaRec = null;
+      stream.getTracks().forEach((tr) => tr.stop());
+      ac.close();
+      btn.classList.remove("on");
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      if (!spoke || blob.size < 1500) { status("noSpeech"); return; }
+      status("understanding");
+      btn.classList.add("busy");
+      try {
+        const fd = new FormData();
+        fd.append("file", blob, "question." + (blob.type.includes("mp4") ? "mp4" : blob.type.includes("ogg") ? "ogg" : "webm"));
+        fd.append("lang", lang);
+        const r = await fetch("/api/stt", { method: "POST", body: fd });
+        if (r.status === 503) { status("voiceLater"); return; }
+        const j = r.ok ? await r.json() : {};
+        if (j.text?.trim()) { status(); ask(j.text.trim()); } else status("noSpeech");
+      } catch { status("noMic"); }
+      finally { btn.classList.remove("busy"); }
+    };
+    rec.start(250);
   }
 
   // ---------------------------------------------------------------- ask + stream
