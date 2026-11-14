@@ -488,9 +488,13 @@ PUBLIC_URL = os.environ.get("IDIBO_PUBLIC_URL", "https://idibo-2027.up.railway.a
 WA_LANG: dict[str, str] = {}  # sender -> chosen language (memory only; nothing about users is stored on disk)
 LANG_WORDS = {"en": ("english", "en"), "pcm": ("pidgin", "naija", "pcm"), "yo": ("yoruba", "yorùbá", "yo"),
               "ha": ("hausa", "ha"), "ig": ("igbo", "ig")}
+WA_LANG_TIP = ("Choose your language: send *english*, *pidgin*, *yoruba*, *hausa* or *igbo*.\n"
+               "Naijá: send *pidgin* · Yorùbá: fi *yoruba* ránṣẹ́ · Hausa: aika *hausa* · Igbo: zipu *igbo*")
+WA_SEEN: set = set()  # senders already greeted (memory only)
 WA_HELP = ("Ìdìbò: voter information for Nigeria's 2027 election, from INEC and the Electoral Act 2026.\n\n"
            "• Ask a question, by text or voice note.\n• Forward a message you doubt, and I'll check it.\n"
-           "• Change language: send english, pidgin, yoruba, hausa or igbo.\n\n"
+           "• Forwarded rumours, polling hours, PVCs, the law, candidates: all with official sources.\n\n"
+           + WA_LANG_TIP + "\n\n"
            "Not official INEC guidance. I never tell anyone who to vote for.")
 
 
@@ -550,17 +554,21 @@ async def answer_text(question: str, lang: str, mode: str) -> tuple[str, list[di
 
 def wa_format(answer: str, sources: list[dict]) -> str:
     ids = {s["id"]: s for s in sources}
-    order: list[str] = []
+    order: list[str] = []  # one entry per distinct source URL
 
     def num(m):
         sid = m.group(1)
         if sid not in ids:
             return ""
-        if sid not in order:
+        url = ids[sid]["url"]
+        first = next((o for o in order if ids[o]["url"] == url), None)
+        if first is None:
             order.append(sid)
-        return f"[{order.index(sid) + 1}]"
+            first = sid
+        return f"[{order.index(first) + 1}]"
 
     text = re.sub(r"\s*\[([a-z0-9-]+)\]", lambda m: " " + num(m) if num(m) else "", answer)
+    text = re.sub(r"(\[\d+\])(\s*\1)+", r"\1", text)  # "[1] [1]" -> "[1]"
     text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)  # WhatsApp bold
     lines = [text]
     if order:
@@ -716,6 +724,12 @@ async def meta_handle(m: dict) -> None:
             await meta_send(user, "Please send text or a voice note.")
             return
         body = (m.get("text") or {}).get("body", "")
+        low = body.lower().strip(" .!")
+        if user not in WA_SEEN:
+            WA_SEEN.add(user)
+            greeting = low in ("hi", "hello", "help", "start", "menu") or any(low in w for w in LANG_WORDS.values())
+            if not greeting:  # a first message that is already a question: greet, then answer it
+                await meta_send(user, WA_HELP)
         text, media = await wa_reply({"From": "meta:" + user, "Body": body}, audio)
         typing.cancel()
         await meta_send(user, text)
