@@ -507,14 +507,14 @@ def detect_lang(text: str) -> str:
     return "en"
 
 
-def twilio_ok(sig: str, params: dict) -> bool:
+def twilio_ok(sig: str, params: dict, path: str = "/api/whatsapp") -> bool:
     import base64
     import hmac
 
     token = env_key("TWILIO_AUTH_TOKEN")
     if not token:
         return False
-    data = PUBLIC_URL + "/api/whatsapp" + "".join(k + params[k] for k in sorted(params))
+    data = PUBLIC_URL + path + "".join(k + params[k] for k in sorted(params))
     want = base64.b64encode(hmac.new(token.encode(), data.encode(), hashlib.sha1).digest()).decode()
     return hmac.compare_digest(want, sig or "")
 
@@ -570,59 +570,97 @@ def wa_format(answer: str, sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
-async def wa_handle(form: dict) -> None:
-    user, ours = form.get("From", ""), form.get("To", "")
+async def wa_reply(form: dict) -> tuple[str, str | None]:
+    """The reply to one incoming WhatsApp message: (text, optional voice-note URL)."""
+    user = form.get("From", "")
     text = (form.get("Body") or "").strip()
     voice_in = int(form.get("NumMedia") or 0) > 0 and (form.get("MediaContentType0") or "").startswith("audio")
     lang = WA_LANG.get(user)
-    try:
-        low = text.lower().strip(" .!")
-        for code, words in LANG_WORDS.items():
-            if low in words:
-                WA_LANG[user] = code
-                await wa_send(user, ours, f"OK: {LANGS[code]}. " + I18N_OK.get(code, ""))
-                return
-        if low in ("hi", "hello", "help", "start", "menu", "") and not voice_in:
-            await wa_send(user, ours, WA_HELP)
-            return
-        if voice_in:
-            sid, token = env_key("TWILIO_ACCOUNT_SID"), env_key("TWILIO_AUTH_TOKEN")
-            async with httpx.AsyncClient(timeout=60, auth=(sid, token), follow_redirects=True) as c:
-                audio = (await c.get(form["MediaUrl0"])).content
-            got = await transcribe(audio, "voice.ogg", form.get("MediaContentType0") or "audio/ogg", lang or "en")
-            text = got["text"]
-        lang = lang or detect_lang(text)
-        # A long or forwarded message is something to check; a short one is a question.
-        mode = "check" if len(text) > 160 or re.match(r"(?i)(fwd|forwarded|check|is this (true|real))\b", text) else "ask"
-        answer, sources = await answer_text(text, lang, mode)
-        await wa_send(user, ours, wa_format(answer, sources))
-        if voice_in and answer:
-            try:
-                await tts(TTS(text=answer, lang=lang))
-            except Exception as e:
-                print("whatsapp voice failed", repr(e)[:200], flush=True)
-                return
+    low = text.lower().strip(" .!")
+    for code, words in LANG_WORDS.items():
+        if low in words:
+            WA_LANG[user] = code
+            return f"OK: {LANGS[code]}. " + I18N_OK.get(code, ""), None
+    if low in ("hi", "hello", "help", "start", "menu", "") and not voice_in:
+        return WA_HELP, None
+    if voice_in:
+        sid, token = env_key("TWILIO_ACCOUNT_SID"), env_key("TWILIO_AUTH_TOKEN")
+        async with httpx.AsyncClient(timeout=60, auth=(sid, token), follow_redirects=True) as c:
+            audio = (await c.get(form["MediaUrl0"])).content
+        text = (await transcribe(audio, "voice.ogg", form.get("MediaContentType0") or "audio/ogg", lang or "en"))["text"]
+    lang = lang or detect_lang(text)
+    # A long or forwarded message is something to check; a short one is a question.
+    mode = "check" if len(text) > 160 or re.match(r"(?i)(fwd|forwarded|check|is this (true|real))\b", text) else "ask"
+    answer, sources = await answer_text(text, lang, mode)
+    media = None
+    if voice_in and answer:
+        try:
+            await tts(TTS(text=answer, lang=lang))
             clean = re.sub(r"[*#_`]", "", re.sub(r"\[[a-z0-9-]+\]", "", answer)).strip()[:1500]
             if len(clean) < 20:
                 clean = clean.ljust(19) + "......"
-            h = hashlib.sha256(f"{VOICE.get(lang, 'femi')}|{lang}|{clean}".encode()).hexdigest()[:24]
-            await wa_send(user, ours, "", f"{PUBLIC_URL}/api/voice/{h}.mp3")
-    except Exception as e:  # tell the user rather than going silent
-        print("whatsapp error", repr(e)[:300], flush=True)
-        await wa_send(user, ours, "Sorry, I couldn't answer that just now. Please try again in a minute.")
+            media = f"{PUBLIC_URL}/api/voice/" + hashlib.sha256(f"{VOICE.get(lang, 'femi')}|{lang}|{clean}".encode()).hexdigest()[:24] + ".mp3"
+        except Exception as e:
+            print("whatsapp voice failed", repr(e)[:200], flush=True)
+    return wa_format(answer, sources), media
 
 
 I18N_OK = {"en": "Ask your question.", "pcm": "Ask your question.", "yo": "Béèrè ìbéèrè rẹ.",
            "ha": "Yi tambayarka.", "ig": "Jụọ ajụjụ gị."}
+# Replies go back in the webhook response (TwiML): Twilio's trial WhatsApp numbers refuse free-text messages sent
+# through the REST API, but accept a reply to an incoming message. Twilio waits 15 s per request and an answer can take
+# longer, so after 12 s the server answers <Redirect>; Twilio calls back and gets the answer when it is ready.
+WA_JOBS: dict[str, asyncio.Task] = {}
+WA_WAIT, WA_HOPS = 12.0, 8
+
+
+def twiml(body: str = "", media: str | None = None, redirect: str | None = None) -> Response:
+    from xml.sax.saxutils import escape
+
+    if redirect:
+        x = f'<Response><Redirect method="POST">{escape(redirect)}</Redirect></Response>'
+    else:
+        m = f"<Media>{escape(media)}</Media>" if media else ""
+        x = f"<Response><Message><Body>{escape(body[:1590])}</Body>{m}</Message></Response>"
+    return Response(x, media_type="application/xml")
+
+
+async def wa_step(sid: str, hop: int) -> Response:
+    task = WA_JOBS.get(sid)
+    if task is None:
+        return twiml("Sorry, I lost track of that message. Please send it again.")
+    try:
+        text, media = await asyncio.wait_for(asyncio.shield(task), WA_WAIT)
+    except asyncio.TimeoutError:
+        if hop >= WA_HOPS:
+            WA_JOBS.pop(sid, None)
+            return twiml("Sorry, that is taking too long. Please try again in a minute.")
+        return twiml(redirect=f"{PUBLIC_URL}/api/whatsapp/wait?sid={sid}&hop={hop + 1}")
+    except Exception as e:
+        print("whatsapp error", repr(e)[:300], flush=True)
+        WA_JOBS.pop(sid, None)
+        return twiml("Sorry, I couldn't answer that just now. Please try again in a minute.")
+    WA_JOBS.pop(sid, None)
+    return twiml(text, media)
 
 
 @app.post("/api/whatsapp")
 async def whatsapp(request: Request):
     form = {k: str(v) for k, v in (await request.form()).items()}
-    if not twilio_ok(request.headers.get("X-Twilio-Signature", ""), form):
+    if not twilio_ok(request.headers.get("X-Twilio-Signature", ""), form, "/api/whatsapp"):
         raise HTTPException(403, "bad signature")
-    asyncio.create_task(wa_handle(form))
-    return Response("<Response></Response>", media_type="application/xml")
+    sid = form.get("MessageSid") or hashlib.sha256(json.dumps(form, sort_keys=True).encode()).hexdigest()[:20]
+    if sid not in WA_JOBS:
+        WA_JOBS[sid] = asyncio.create_task(wa_reply(form))
+    return await wa_step(sid, 0)
+
+
+@app.post("/api/whatsapp/wait")
+async def whatsapp_wait(request: Request, sid: str, hop: int = 1):
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    if not twilio_ok(request.headers.get("X-Twilio-Signature", ""), form, f"/api/whatsapp/wait?{request.url.query}"):
+        raise HTTPException(403, "bad signature")
+    return await wa_step(sid, hop)
 
 
 @app.get("/api/voice/{name}")
