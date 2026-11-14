@@ -570,11 +570,11 @@ def wa_format(answer: str, sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
-async def wa_reply(form: dict) -> tuple[str, str | None]:
+async def wa_reply(form: dict, audio: bytes | None = None) -> tuple[str, str | None]:
     """The reply to one incoming WhatsApp message: (text, optional voice-note URL)."""
     user = form.get("From", "")
     text = (form.get("Body") or "").strip()
-    voice_in = int(form.get("NumMedia") or 0) > 0 and (form.get("MediaContentType0") or "").startswith("audio")
+    voice_in = audio is not None or (int(form.get("NumMedia") or 0) > 0 and (form.get("MediaContentType0") or "").startswith("audio"))
     lang = WA_LANG.get(user)
     low = text.lower().strip(" .!")
     for code, words in LANG_WORDS.items():
@@ -584,9 +584,10 @@ async def wa_reply(form: dict) -> tuple[str, str | None]:
     if low in ("hi", "hello", "help", "start", "menu", "") and not voice_in:
         return WA_HELP, None
     if voice_in:
-        sid, token = env_key("TWILIO_ACCOUNT_SID"), env_key("TWILIO_AUTH_TOKEN")
-        async with httpx.AsyncClient(timeout=60, auth=(sid, token), follow_redirects=True) as c:
-            audio = (await c.get(form["MediaUrl0"])).content
+        if audio is None:
+            sid, token = env_key("TWILIO_ACCOUNT_SID"), env_key("TWILIO_AUTH_TOKEN")
+            async with httpx.AsyncClient(timeout=60, auth=(sid, token), follow_redirects=True) as c:
+                audio = (await c.get(form["MediaUrl0"])).content
         text = (await transcribe(audio, "voice.ogg", form.get("MediaContentType0") or "audio/ogg", lang or "en"))["text"]
     lang = lang or detect_lang(text)
     # A long or forwarded message is something to check; a short one is a question.
@@ -622,7 +623,9 @@ def twiml(body: str = "", media: str | None = None, redirect: str | None = None)
     else:
         m = f"<Media>{escape(media)}</Media>" if media else ""
         x = f"<Response><Message><Body>{escape(body[:1590])}</Body>{m}</Message></Response>"
-    return Response(x, media_type="application/xml")
+    # text/xml, and no-transform so Railway's edge does not gzip it (Twilio rejected the compressed reply: error 12300)
+    return Response('<?xml version="1.0" encoding="UTF-8"?>' + x, media_type="text/xml; charset=utf-8",
+                    headers={"Cache-Control": "no-transform"})
 
 
 async def wa_step(sid: str, hop: int) -> Response:
@@ -661,6 +664,77 @@ async def whatsapp_wait(request: Request, sid: str, hop: int = 1):
     if not twilio_ok(request.headers.get("X-Twilio-Signature", ""), form, f"/api/whatsapp/wait?{request.url.query}"):
         raise HTTPException(403, "bad signature")
     return await wa_step(sid, hop)
+
+
+# ------------------------------------------------------------------ WhatsApp (Meta Cloud API)
+# The same bot on Meta's WhatsApp Cloud API: Meta calls /api/meta/whatsapp with each message; replies are sent with the
+# Graph API (free text is allowed within 24 h of the user's last message). Needs META_WA_TOKEN, META_PHONE_NUMBER_ID,
+# META_APP_SECRET (to check Meta's signature) and META_VERIFY_TOKEN (any string, also typed into Meta's webhook form).
+GRAPH = "https://graph.facebook.com/v21.0"
+
+
+async def meta_send(to: str, body: str = "", audio_url: str | None = None) -> None:
+    token, pid = env_key("META_WA_TOKEN"), env_key("META_PHONE_NUMBER_ID")
+    msg = ({"type": "audio", "audio": {"link": audio_url}} if audio_url
+           else {"type": "text", "text": {"body": body[:4000], "preview_url": False}})
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.post(f"{GRAPH}/{pid}/messages", headers={"Authorization": f"Bearer {token}"},
+                         json={"messaging_product": "whatsapp", "to": to, **msg})
+        if r.status_code >= 400:
+            print("meta send failed", r.status_code, r.text[:300], flush=True)
+
+
+async def meta_handle(m: dict) -> None:
+    user = m.get("from", "")
+    try:
+        audio = None
+        if m.get("type") == "audio":
+            token = env_key("META_WA_TOKEN")
+            async with httpx.AsyncClient(timeout=60, headers={"Authorization": f"Bearer {token}"}) as c:
+                info = (await c.get(f"{GRAPH}/{m['audio']['id']}")).json()
+                audio = (await c.get(info["url"])).content
+        elif m.get("type") != "text":
+            await meta_send(user, "Please send text or a voice note.")
+            return
+        body = (m.get("text") or {}).get("body", "")
+        text, media = await wa_reply({"From": "meta:" + user, "Body": body}, audio)
+        await meta_send(user, text)
+        if media:
+            await meta_send(user, audio_url=media)
+    except Exception as e:
+        print("meta whatsapp error", repr(e)[:300], flush=True)
+        await meta_send(user, "Sorry, I couldn't answer that just now. Please try again in a minute.")
+
+
+@app.get("/api/meta/whatsapp")
+def meta_verify(request: Request):
+    q = request.query_params
+    want = env_key("META_VERIFY_TOKEN")
+    if want and q.get("hub.mode") == "subscribe" and q.get("hub.verify_token") == want:
+        return Response(q.get("hub.challenge", ""), media_type="text/plain")
+    raise HTTPException(403, "verification failed")
+
+
+@app.post("/api/meta/whatsapp")
+async def meta_webhook(request: Request):
+    import hmac
+
+    raw = await request.body()
+    secret = env_key("META_APP_SECRET")
+    want = "sha256=" + hmac.new((secret or "").encode(), raw, hashlib.sha256).hexdigest()
+    if not secret or not hmac.compare_digest(want, request.headers.get("X-Hub-Signature-256", "")):
+        raise HTTPException(403, "bad signature")
+    data = json.loads(raw or b"{}")
+    for entry in data.get("entry", []):
+        for ch in entry.get("changes", []):
+            for m in ch.get("value", {}).get("messages", []) or []:
+                if m.get("id") not in META_SEEN:  # Meta can deliver the same message twice
+                    META_SEEN.add(m.get("id"))
+                    asyncio.create_task(meta_handle(m))
+    return {"ok": True}
+
+
+META_SEEN: set = set()
 
 
 @app.get("/api/voice/{name}")
