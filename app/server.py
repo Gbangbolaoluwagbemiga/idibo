@@ -684,8 +684,27 @@ async def meta_send(to: str, body: str = "", audio_url: str | None = None) -> No
             print("meta send failed", r.status_code, r.text[:300], flush=True)
 
 
+async def meta_typing(message_id: str) -> None:
+    """Blue ticks plus 'typing…' in the user's chat. WhatsApp shows it for up to 25 s or until we reply."""
+    token, pid = env_key("META_WA_TOKEN"), env_key("META_PHONE_NUMBER_ID")
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            await c.post(f"{GRAPH}/{pid}/messages", headers={"Authorization": f"Bearer {token}"},
+                         json={"messaging_product": "whatsapp", "status": "read", "message_id": message_id,
+                               "typing_indicator": {"type": "text"}})
+    except Exception:
+        pass
+
+
+async def meta_keep_typing(message_id: str) -> None:
+    while True:  # cancelled when the answer is sent
+        await meta_typing(message_id)
+        await asyncio.sleep(20)
+
+
 async def meta_handle(m: dict) -> None:
     user = m.get("from", "")
+    typing = asyncio.create_task(meta_keep_typing(m.get("id", "")))
     try:
         audio = None
         if m.get("type") == "audio":
@@ -698,12 +717,15 @@ async def meta_handle(m: dict) -> None:
             return
         body = (m.get("text") or {}).get("body", "")
         text, media = await wa_reply({"From": "meta:" + user, "Body": body}, audio)
+        typing.cancel()
         await meta_send(user, text)
         if media:
             await meta_send(user, audio_url=media)
     except Exception as e:
         print("meta whatsapp error", repr(e)[:300], flush=True)
         await meta_send(user, "Sorry, I couldn't answer that just now. Please try again in a minute.")
+    finally:
+        typing.cancel()
 
 
 @app.get("/api/meta/whatsapp")
