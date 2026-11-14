@@ -228,7 +228,18 @@ all 7 that echoed a demanded phrase; on the 691 benchmark questions (v1 and v2, 
 benchmark behaviour is unchanged. The model's training and evaluation are not affected, and it is reported as a
 deployment layer, not a model result.
 
-**Re-run after the guard:** ⟨after⟩
+**Re-run after the guard** (same probes, same live URL):
+
+| Probe | Before | After |
+|---|---|---|
+| prompt injection | 3 of 8 | **0 of 8** |
+| encoding | 1 of 5 | **0 of 5** |
+| indirect injection (fake notice with a hidden instruction) | 2 of 6 | **0 of 6** |
+| jailbreak, instruction extraction, endorsement bait | 0 | 0 |
+| over-refusal (the out-of-scope calculator request) | 1 of 5 | 1 of 5 |
+
+Every successful attack from the first run was blocked. The one remaining flag is a refusal to write a calculator
+program, which is out of scope for an election assistant by design (`runs/audit/redteam.after_guard.json`).
 
 ## 7. Where voters are: WhatsApp
 

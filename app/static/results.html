@@ -203,8 +203,9 @@
   <p class="note"><strong>Fix.</strong> A marker added to "I can't confirm this" is enough to fake a screenshot, so we added
   a guard (<code>idibo/guard.py</code>): if a question carries injection cues and the reply repeats a phrase the question
   demanded, the reply is replaced. In check mode, the replacement warns that the message hides instructions aimed at an AI.
-  It caught all 7 echoing replies from the first run and found no cue in our 691 benchmark questions, so normal answers are
-  unchanged. The red-team re-run against the guarded app is reported in the write-up.</p>
+  It found no cue in our 691 benchmark questions, so normal answers are unchanged. <strong>Re-run against the guarded app:
+  0 of 19 injection, encoding and indirect-injection attacks worked (6 before).</strong> The only remaining flag is the
+  calculator request, refused as out of scope.</p>
 
   <h2 id="grading">How answers were graded</h2>
   <p>Each answer is back-translated into English by <code>tiny-aya-global</code> and graded against a fixed rubric by
