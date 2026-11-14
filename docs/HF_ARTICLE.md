@@ -8,6 +8,7 @@ civic questions, against 35% for the same fine-tune without the safety data (p =
 
 | | |
 |---|---|
+| **Demo video** (3½ min) | https://youtu.be/Nn0A--cZJWw |
 | **Live app** (web, voice, 5 languages) | https://idibo-2027.up.railway.app |
 | **Results and method page** | https://idibo-2027.up.railway.app/results.html |
 | **WhatsApp** | Meta Cloud API test number +1 555 192 8126 (registered test phones only; shown in the demo video) |

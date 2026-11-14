@@ -9,6 +9,7 @@
 | HF dataset collection | https://huggingface.co/collections/GOPAE/idibo-data-nigeria-2027-election-safety-6af854634cce9ce0f613d91d : `GOPAE/idibo-eval` (benchmarks v1 and v2, KB, training data, generations, grades) |
 | Write-up | https://github.com/Gbangbolaoluwagbemiga/idibo/blob/main/docs/WRITEUP.md (results page: https://idibo-2027.up.railway.app/results.html) |
 | GitHub repo (reproducibility) | https://github.com/Gbangbolaoluwagbemiga/idibo |
+| Demo video | https://youtu.be/Nn0A--cZJWw |
 | Public deployment | https://idibo-2027.up.railway.app (web, voice, 5 languages) · WhatsApp: Meta test number +1 555 192 8126 (registered phones; shown in the demo video) |
 
 **Tracks and problem statements**

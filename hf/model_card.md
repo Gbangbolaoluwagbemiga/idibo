@@ -15,7 +15,7 @@ voters' questions in English, Nigerian Pidgin, Yorùbá and Hausa (Igbo: beta, u
 INEC and Electoral Act 2026 passages, with citations. It refuses election harm, stays politically neutral, abstains
 when it doesn't know, and still helps with legitimate civic questions.
 
-**Try it:** https://idibo-2027.up.railway.app · **Code:** https://github.com/Gbangbolaoluwagbemiga/idibo · **Write-up:** https://github.com/Gbangbolaoluwagbemiga/idibo/blob/main/docs/WRITEUP.md · **Results page:** https://idibo-2027.up.railway.app/results.html
+**Demo video:** https://youtu.be/Nn0A--cZJWw · **Try it:** https://idibo-2027.up.railway.app · **Code:** https://github.com/Gbangbolaoluwagbemiga/idibo · **Write-up:** https://github.com/Gbangbolaoluwagbemiga/idibo/blob/main/docs/WRITEUP.md · **Results page:** https://idibo-2027.up.railway.app/results.html
 
 ## Files
 
