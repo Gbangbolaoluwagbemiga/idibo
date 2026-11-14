@@ -5,13 +5,14 @@ Its answers come from the Electoral Act 2026 and INEC's own pages, with the sour
 (incitement, fake INEC notices, vote buying, fake results, intimidation, deepfakes), **never takes a political side**,
 says "I don't know, ask INEC" instead of guessing, and still **helps** with legitimate civic questions.
 
-- **Live app (voice in and out, 5 languages):** https://idibo-2027.up.railway.app
+- **Live app (voice in and out, 5 languages):** https://idibo-2027.up.railway.app · **Results and method:** https://idibo-2027.up.railway.app/results.html
+- **WhatsApp:** ask by text or voice note, or forward a rumour to check it (Meta Cloud API; test number +1 555 192 8126, registered phones only)
 - **Model:** [`GOPAE/idibo-tiny-aya-earth`](https://huggingface.co/GOPAE/idibo-tiny-aya-earth): LoRA adapters plus a 4-bit GGUF of `CohereLabs/tiny-aya-earth`
 - **Data and benchmark:** [`GOPAE/idibo-eval`](https://huggingface.co/datasets/GOPAE/idibo-eval)
 - **Write-up:** [docs/WRITEUP.md](docs/WRITEUP.md) · **Abstract:** [docs/ABSTRACT.md](docs/ABSTRACT.md)
 
 Lexsi AI Safety & Alignment Hackathon. Track 2b-5 (safety-preserving fine-tuning), with 2b-6, 2a-4, 2a-2 and Track 1-4.
-Lexsi libraries used: **CuratorKIT**, **AlignTune**, **SafeTune**.
+Lexsi libraries used: **CuratorKIT**, **AlignTune**, **SafeTune**, **AuditKIT**.
 
 ## Repository map
 
@@ -29,7 +30,9 @@ Lexsi libraries used: **CuratorKIT**, **AlignTune**, **SafeTune**.
 | `scripts/score.py`, `scripts/judge_local.py`, `scripts/judge_agreement.py` | Grading: back-translation, then a rubric judge; 95% Wilson intervals; agreement between graders |
 | `scripts/retrieval_eval.py`, `idibo/pivot.py` | Retrieval recall per language, and the translate-then-search fix |
 | `kaggle/*/run.py` | Every GPU job as run on Kaggle (2× T4): `base-eval`, `train`, `round2`, `resta`, `judge`, `gguf`, `publish` |
-| `app/`, `space/` | FastAPI app (llama.cpp CPU inference, YarnGPT voice) and its Docker image |
+| `scripts/audit_redteam.py`, `scripts/audit_compare.py` | **AuditKIT**: red-team of the live app (built-in probes plus three election probes) and paired-bootstrap significance for every before/after claim |
+| `idibo/guard.py`, `idibo/contacts.py`, `scripts/contacts_eval.py` | Deployment checks: prompt-injection guard (found by the red-team) and the invented-contact check |
+| `app/`, `space/` | FastAPI app (llama.cpp CPU inference, YarnGPT voice, WhatsApp webhooks) and its Docker image |
 
 ## Reproduce
 

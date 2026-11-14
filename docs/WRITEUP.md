@@ -148,6 +148,31 @@ The translation step costs about 0.5 s on a laptop. It is live in the app for yo
 correct rose from 5% to 35% (+0.30, p = 0.005, AuditKIT); Hausa 25% → 30% and Igbo 25% → 25% (not significant). Safety
 and neutrality did not get worse in any of the three.
 
+### 4.5 A hallucination the benchmarks did not grade: invented contact details
+
+Reading the answers by hand turned up something no rubric asked about. Refusals that offer a lawful alternative
+("report it to INEC…") invite the model to make up where to report it: a hotline `0800-INEC-HELP` (43 times), a
+fact-check page `www.inec.gov.ng/factcheck` (28), and the domain `inec.gov.ng`, which does not exist (INEC's site is
+inecnigeria.org). For an election assistant this is a safety bug: an invented number is exactly what a scammer would
+like voters to call.
+
+`scripts/contacts_eval.py` counts answers with a web address, email or phone number found nowhere in the knowledge base
+(plus INEC's own portals irev. and cvr.inecnigeria.org):
+
+| Model | Answers with an invented contact |
+|---|---|
+| Base + sources | 4.8% (33 of 691) |
+| Plain civic fine-tune | 1.9% (11 of 582) |
+| + ReSta | **14.3%** (83 of 582) |
+| + Safe LoRA | 0.5% (3 of 582) |
+| Ìdìbò | 6.7% (46 of 691) |
+
+The safety-trained models invent more contacts than the plain fine-tune, and the ReSta repair, which pushes the model
+further toward refusal templates, invents the most. Every one of 14 flagged answers checked by hand was a real
+invention. The fix is a check at deployment, not more training: `idibo/contacts.py` keeps a contact only if it appears
+in the sources, and replaces any other with inecnigeria.org. Applied to every recorded answer it removes all of them
+(0 left in every condition), and it runs on every live answer, on the web and on WhatsApp.
+
 ## 5. How we measured, and its limits
 
 - **Held-out test set.** Benchmark v2 was written after training. Its nearest training question has a cosine similarity
@@ -205,7 +230,20 @@ deployment layer, not a model result.
 
 **Re-run after the guard:** ⟨after⟩
 
-## 7. Cost: closed API vs self-hosted (estimate)
+## 7. Where voters are: WhatsApp
+
+Election rumours in Nigeria travel on WhatsApp, so Ìdìbò answers there too (Meta's WhatsApp Cloud API). A voter can
+ask by text or voice note in any of the five languages, or **forward a message they doubt** and get a check with
+numbered sources. Replies go through exactly the same pipeline as the web app (retrieval, injection guard, contact
+check), a voice note gets a spoken answer back (YarnGPT), and the chat shows "typing…" while it works. New users are
+told how to switch language in all five languages. Webhooks are verified (Meta's HMAC signature), and nothing about a
+user is stored beyond their chosen language, in memory.
+
+It currently runs on Meta's free test number (+1 555 192 8126), which can message up to five registered phones; a
+public launch needs a verified business number and display name. (We first built it on Twilio; Twilio's new trial
+numbers only send pre-approved templates, so free-text answers were blocked. That code path is still in the server.)
+
+## 8. Cost: closed API vs self-hosted (estimate)
 
 Per answer: about 2,000 input tokens (instructions and 4 sources) and about 250 output tokens.
 - **Closed API** (Cohere Command A list price, $2.50 / M input, $10 / M output): about **$0.0075 per answer**, so
@@ -215,12 +253,12 @@ Per answer: about 2,000 input tokens (instructions and 4 sources) and about 250 
   $900 per million questions**. That is roughly 8× cheaper, the data stays in our deployment, and the safety behaviour
   is ours to audit and repair.
 
-## 8. Reproduce
+## 9. Reproduce
 
 See the repository README: `scripts/` (data, training, evaluation, grading), `kaggle/` (each GPU job as a script) and
 `space/` (the app image).
 
-## 9. Responsible-use notes
+## 10. Responsible-use notes
 
 - The benchmark contains harmful *requests* only, never harmful content.
 - Ìdìbò endorses no party. Party names appear only in symmetric swap tests.
@@ -229,7 +267,7 @@ See the repository README: `scripts/` (data, training, evaluation, grading), `ka
   reports said 20 February; the benchmark checks that the model corrects that rumour from the source instead of
   agreeing with it. Every answer cites its source and points to inecnigeria.org for changes.
 
-## 10. Known limitations
+## 11. Known limitations
 
 - **Over-refusal on code-mixed prompts** (4 of 6 benign) and in Yorùbá (44%) is still high. Safe LoRA does better on
   code-mixed prompts.
@@ -239,9 +277,8 @@ See the repository README: `scripts/` (data, training, evaluation, grading), `ka
   left as they are.
 - **Hallucinated detail.** Asked what to bring to the polling unit, it sometimes adds "ID or passport" (the requirement
   is the PVC).
-- **Invented contact details.** Some refusals name a fact-check web address and a hotline number that do not exist, and
-  give www.inec.gov.ng as INEC's domain (the real one is inecnigeria.org). Contact details should come only from the
-  knowledge base.
+- **Invented contact details** (§4.5) are removed at deployment by a check against the sources; the model itself still
+  produces them.
 - **The candidate list was added after evaluation.** INEC's final list of 2027 presidential candidates was missing from
   the original crawl. The app now shows it word for word from INEC's PDF (`scripts/add_candidates_kb.py`). Benchmarks
   were run on the 309-passage knowledge base without it.

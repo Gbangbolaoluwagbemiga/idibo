@@ -213,6 +213,31 @@
   (κ 0.28), so the harmful rates above are lower bounds. A plain check agrees with the ranking: 1 of Ìdìbò's 56 harmful-
   prompt answers lacks a refusal opening, against 40 for the base model.</p>
 
+  <h2 id="contacts">A hallucination no rubric graded: invented contacts</h2>
+  <p>Reading the answers by hand, we found refusals that point voters to INEC contacts that do not exist: a hotline
+  <code>0800-INEC-HELP</code> (43 times), a page <code>www.inec.gov.ng/factcheck</code> (28), and the domain
+  <code>inec.gov.ng</code>, which does not resolve (INEC is inecnigeria.org). A made-up number is exactly what a scammer
+  would want voters to call.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Model</th><th>Answers with an invented contact</th></tr></thead>
+    <tbody>
+      <tr><td>Base + sources</td><td class="n">4.8% (33 of 691)</td></tr>
+      <tr><td>Plain civic fine-tune</td><td class="n">1.9% (11 of 582)</td></tr>
+      <tr><td>+ ReSta</td><td class="n">14.3% (83 of 582)</td></tr>
+      <tr><td>+ Safe LoRA</td><td class="n">0.5% (3 of 582)</td></tr>
+      <tr class="us"><td>Ìdìbò</td><td class="n">6.7% (46 of 691)</td></tr>
+      <tr class="us"><td>Ìdìbò as deployed (contact check on)</td><td class="n">0%</td></tr>
+    </tbody></table></div>
+  <p class="note">Safety training made this worse: "report it to…" refusals invite an invented "where". The fix is a
+  check, not more training: any web address, email or phone number that is not in the sources is replaced with
+  inecnigeria.org, on the web app and on WhatsApp (<code>idibo/contacts.py</code>).</p>
+
+  <h2 id="whatsapp">On WhatsApp, where rumours spread</h2>
+  <p>Voters can ask Ìdìbò by text or voice note, or forward a message they doubt, on WhatsApp. Replies use the same
+  pipeline (sources, injection guard, contact check), come with numbered sources, and a voice note gets a spoken reply.
+  It runs on Meta's free test number, which can reach up to five registered phones; a public launch needs a verified
+  business number.</p>
+
   <h2 id="deploy">Deployment, latency and cost</h2>
   <ul>
     <li><strong>Runs on CPU.</strong> Ìdìbò merged and quantised to 4-bit GGUF (2.1 GB), served by llama.cpp on 8 vCPUs
@@ -230,9 +255,7 @@
     <li>Igbo is untrained and weaker than the base model on facts: labelled beta.</li>
     <li>A Pidgin-flavoured question asked with English selected may get a Pidgin answer (the model mirrors the question).</li>
     <li>It sometimes adds "ID or passport" to what to bring to the polling unit; the requirement is the PVC.</li>
-    <li>In some refusals it invents INEC contact details (a fact-check web address and a hotline number that do not exist)
-      and gives www.inec.gov.ng as INEC's domain; the real site is inecnigeria.org. A fix is to answer contact questions
-      only from the knowledge base.</li>
+    <li>The model still invents contact details in some refusals; the deployment check removes them before anyone sees them.</li>
     <li>INEC's 2027 presidential candidate list was added to the app after evaluation; the benchmarks ran without it.</li>
     <li>Benchmark translations and the guard's Yorùbá, Hausa and Igbo messages are machine-made and not yet reviewed by
       native speakers.</li>
