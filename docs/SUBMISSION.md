@@ -5,11 +5,11 @@
 | Project | Ìdìbò: a safe, multilingual voter-information assistant for Nigeria's 2027 election |
 | Registrant email | ⟨your registered email⟩ |
 | Abstract | docs/ABSTRACT.md (under 500 words) |
-| HF model collection | ⟨collection URL⟩: `GOPAE/idibo-tiny-aya-earth` (adapters `idibo`, `civic`, `civic-safelora`; GGUF) |
-| HF dataset collection | ⟨collection URL⟩: `GOPAE/idibo-eval` (benchmarks v1 and v2, KB, training data, generations, grades) |
-| Write-up | ⟨HF article or GitHub link to docs/WRITEUP.md⟩ |
-| GitHub repo (reproducibility) | ⟨GitHub URL⟩ |
-| Public deployment | https://idibo-2027.up.railway.app |
+| HF model collection | https://huggingface.co/collections/GOPAE/idibo-models-nigeria-2027-election-safety-6af85462c9b6f21539aaa65b : `GOPAE/idibo-tiny-aya-earth` (adapters `idibo`, `civic`, `civic-safelora`; GGUF) |
+| HF dataset collection | https://huggingface.co/collections/GOPAE/idibo-data-nigeria-2027-election-safety-6af854634cce9ce0f613d91d : `GOPAE/idibo-eval` (benchmarks v1 and v2, KB, training data, generations, grades) |
+| Write-up | https://github.com/Gbangbolaoluwagbemiga/idibo/blob/main/docs/WRITEUP.md (results page: https://idibo-2027.up.railway.app/results.html) |
+| GitHub repo (reproducibility) | https://github.com/Gbangbolaoluwagbemiga/idibo |
+| Public deployment | https://idibo-2027.up.railway.app (web, voice, 5 languages) · WhatsApp: Meta test number +1 555 192 8126 (registered phones; shown in the demo video) |
 
 **Tracks and problem statements**
 - Primary: **Track 2b, problem 5: safety-preserving fine-tuning** (a domain task with safety hardening, compared with a plain fine-tune)

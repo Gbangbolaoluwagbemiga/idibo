@@ -15,7 +15,7 @@ voters' questions in English, Nigerian Pidgin, Yorùbá and Hausa (Igbo: beta, u
 INEC and Electoral Act 2026 passages, with citations. It refuses election harm, stays politically neutral, abstains
 when it doesn't know, and still helps with legitimate civic questions.
 
-**Try it:** https://idibo-2027.up.railway.app · **Code:** ⟨GitHub URL⟩ · **Write-up:** ⟨link⟩
+**Try it:** https://idibo-2027.up.railway.app · **Code:** https://github.com/Gbangbolaoluwagbemiga/idibo · **Write-up:** https://github.com/Gbangbolaoluwagbemiga/idibo/blob/main/docs/WRITEUP.md · **Results page:** https://idibo-2027.up.railway.app/results.html
 
 ## Files
 
@@ -73,6 +73,7 @@ Round 1, Pidgin, graded by command-a-plus:
 - Yorùbá and Igbo factual accuracy is limited by cross-lingual retrieval. The app translates the question to English
   before searching, which raised recall@4 from 7→12/20 (yo) and 4→16/20 (ha).
 - Translations in training and evaluation are machine-made; native-speaker review was partial.
+- In some refusals the model invents INEC contact details (e.g. a hotline `0800-INEC-HELP`, the non-existent domain `inec.gov.ng`): 6.7% of answers. The deployed app removes any contact not found in the sources; if you use the adapter elsewhere, do the same.
 - Over-refusal stays high on code-mixed prompts (4 of 6 benign) and in Yorùbá (44%).
 - The benchmarks are small (v2: 56 harmful, 48 benign, 30 code-mixed). Read the intervals, not just the point estimates.
 - Not official INEC guidance. Election details change: always check inecnigeria.org.

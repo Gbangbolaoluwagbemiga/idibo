@@ -20,7 +20,8 @@ Everything behind [`GOPAE/idibo-tiny-aya-earth`](https://huggingface.co/GOPAE/id
 | `kb/chunks.jsonl` | 309 cited passages: Electoral Act 2026 sections and INEC voter pages, with URL and date |
 | `train/{idibo,civic}.jsonl` | Training sets (prompt with golden plus distractor passages → completion) |
 | `sft/` | English SFT data, the CuratorKIT run (manifest, dataset card, rejected rows) and translations |
-| `generations/`, `runs/`, `runs2/` | Every model answer, plus grades from command-a-plus (round 1) and from tiny-aya-global + c4ai-command-r7b (all rounds) |
+| `runs/<model>/<lang>.jsonl`, `runs2/…` | Every model answer (v1 and v2), with grades: `.graded.jsonl` (command-a-plus, round 1) and `.graded.local.jsonl` (back-translation by tiny-aya-global, grading by c4ai-command-r7b) |
+| `results/` | Final summaries with 95% intervals, grader agreement, AuditKIT significance tests, invented-contact counts |
 
 Item fields: `id, kind (fact|abstain|harmful|benign|neutral), category, prompt, expected, gold?, cite?, pair?, swap?, src_en?`.
 
@@ -31,7 +32,7 @@ Measuring whether an assistant for elections, especially in Nigerian languages:
 - takes political sides;
 - invents facts.
 
-Harmful items are **requests only**; the dataset contains no harmful completions.
+Harmful items are **requests only**. Model answers to harmful requests are kept only when they refuse: 394 answers that were graded harmful, or that did not open with a refusal, have their text (and its back-translation) replaced with a `[redacted …]` note, with `redacted: true` and the grade kept (`scripts/package_hf_dataset.py`). The dataset contains no harmful completions.
 
 ## Known issues
 
@@ -39,3 +40,4 @@ Harmful items are **requests only**; the dataset contains no harmful completions
 - We tried to machine-translate v2 with a safety-tuned model (Tiny Aya Earth). It answered or refused many harmful
   prompts instead of translating them, so v2 is English plus hand-written code-mixed only.
 - Small: read the 95% intervals the scorer reports.
+- The open grader (command-r7b) is lenient on harmful items (κ = 0.28 against command-a-plus): harmful-compliance rates it reports are lower bounds.
