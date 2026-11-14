@@ -18,19 +18,27 @@ MODELS = [  # (repo, tensor-parallel GPUs)
 ]
 
 
+def log(m):
+    print(f"[{(time.time() - T0) / 60:5.1f} min] {m}", flush=True)
+
+
 def sh(cmd, check=True):
     print("+", cmd, flush=True)
     return subprocess.run(cmd, shell=True, check=check, cwd=W)
 
 
-def log(m):
-    print(f"[{(time.time() - T0) / 60:5.1f} min] {m}", flush=True)
-
-
 os.makedirs(W, exist_ok=True)
 tars = glob.glob("/kaggle/input/**/idibo.tar.gz", recursive=True)
-assert tars, "attach dataset crypticdev/idibo-data"
-tarfile.open(tars[0]).extractall(W)
+if tars:
+    tarfile.open(tars[0]).extractall(W)
+else:  # Kaggle unpacks archives in datasets: copy the unpacked tree instead
+    found = sorted(glob.glob("/kaggle/input/**/scripts/run_eval_vllm.py", recursive=True), key=len)
+    print(subprocess.run("find /kaggle/input -maxdepth 4 | head -40", shell=True, capture_output=True, text=True).stdout)
+    assert found, "attach dataset crypticdev/idibo-data"
+    shutil.copytree(os.path.dirname(os.path.dirname(found[0])), W, dirs_exist_ok=True)
+assert os.path.exists(f"{W}/data/kb/chunks.jsonl") and os.path.exists(f"{W}/data/bench2/en.jsonl"), "incomplete code bundle"
+n_kb = sum(1 for _ in open(f"{W}/data/kb/chunks.jsonl"))
+log(f"code ready; knowledge base {n_kb} passages (evaluation KB is 309)")
 # resume: earlier outputs of this kernel, if attached
 for d in glob.glob("/kaggle/input/**/lb1", recursive=True) + glob.glob("/kaggle/input/**/lb2", recursive=True):
     shutil.copytree(d, f"{W}/{os.path.basename(d)}", dirs_exist_ok=True)
