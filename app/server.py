@@ -670,7 +670,7 @@ async def whatsapp_wait(request: Request, sid: str, hop: int = 1):
 # The same bot on Meta's WhatsApp Cloud API: Meta calls /api/meta/whatsapp with each message; replies are sent with the
 # Graph API (free text is allowed within 24 h of the user's last message). Needs META_WA_TOKEN, META_PHONE_NUMBER_ID,
 # META_APP_SECRET (to check Meta's signature) and META_VERIFY_TOKEN (any string, also typed into Meta's webhook form).
-GRAPH = "https://graph.facebook.com/v21.0"
+GRAPH = "https://graph.facebook.com/v25.0"
 
 
 async def meta_send(to: str, body: str = "", audio_url: str | None = None) -> None:
