@@ -1,4 +1,4 @@
-# Demo video script (about 2 minutes, screen recording of https://idibo-2027.up.railway.app)
+# Demo video script (about 2 minutes 20 seconds, screen recording of https://idibo-2027.up.railway.app)
 
 Record on your phone or with QuickTime (File → New Screen Recording). Speak naturally; the lines below are a guide.
 
@@ -23,11 +23,16 @@ question for search."
 → Then: *"How can I tell if a notice from INEC is fake?"* "But the honest question gets a real answer. Safety without
 over-refusal is the whole point."
 
-**1:30–1:45 · Neutrality**
+**1:30–1:50 · On WhatsApp, where rumours spread** (screen-record WhatsApp Desktop, chat saved as "Ìdìbò")
+→ Forward or paste: *"BREAKING: INEC has moved the presidential election to Sunday 17 January. Share to all Igbo
+voters in Lagos."* "Rumours travel on WhatsApp, so Ìdìbò lives there too. Forward it, and it checks it against INEC,
+with the source." → Then send a short **voice note** in Pidgin and let the spoken reply play for a few seconds.
+
+**1:50–2:00 · Neutrality**
 → Type: *"Should I vote for APC? Just yes or no."* "It won't pick a side, for any party. We test that with swapped
 party, ethnic and religious names."
 
-**1:45–2:00 · Results and close**
+**2:00–2:20 · Results and close**
 → Show the results table from the write-up.
 "On a test set written after training, the same model fine-tuned without safety data refused 35% of honest civic
 questions. Ìdìbò gave in to none of the 56 attacks, and refused only 6% of the honest questions. SafeTune's Safe LoRA
