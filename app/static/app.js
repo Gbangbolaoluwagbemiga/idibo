@@ -271,7 +271,8 @@
     listenBtn.onclick = () => speak(clean(full), listenBtn);
     box.append(listenBtn);
     const used = sources.filter((s) => cited.includes(s.id));
-    const show = used.length ? used : sources.slice(0, 2);
+    const seen = new Set();  // one chip per document (a list can span two passages of the same PDF)
+    const show = (used.length ? used : sources.slice(0, 2)).filter((s) => { const k = shortSource(s); return seen.has(k) ? false : seen.add(k); });
     if (show.length) {
       const srcs = document.createElement("div");
       srcs.className = "srcs";
@@ -291,9 +292,10 @@
     if (voiceOn) speak(clean(full), listenBtn); else prefetch(clean(full));
     box.scrollIntoView({ behavior: "smooth", block: "end" });
   }
+  const unescapeHtml = (t) => { const d = document.createElement("textarea"); d.innerHTML = t || ""; return d.value; };
   function shortSource(s) {
     if (s.id.startsWith("act-s")) return `Electoral Act 2026 · ${s.section.replace("Section", "s.")}`;
-    return `INEC · ${(s.title || "").replace(/ - Independent National Electoral Commission|INEC Nigeria - /g, "").slice(0, 28)}`;
+    return `INEC · ${unescapeHtml(s.title).replace(/ - Independent National Electoral Commission|INEC Nigeria - /g, "").slice(0, 28)}`;
   }
   async function openSource(id) {
     const d = await (await fetch(`/api/source/${encodeURIComponent(id)}`)).json();
